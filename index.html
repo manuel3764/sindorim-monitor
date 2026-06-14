@@ -88,6 +88,29 @@
   .alarm button{margin-top:24px;background:transparent;border:1px solid var(--danger);
     color:var(--danger);font-size:16px;padding:10px 28px;border-radius:10px;cursor:pointer}
   .alarm button:hover{background:rgba(226,85,74,.12)}
+
+  /* 열차 추적 */
+  .track-input-row{display:flex;gap:8px;margin-bottom:20px}
+  .track-input-row input{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);
+    font-size:16px;padding:9px 14px;border-radius:10px;outline:none;max-width:240px}
+  .track-input-row input:focus{border-color:var(--info)}
+  .track-input-row button{background:var(--info);border:none;color:#fff;
+    font-size:14px;font-weight:600;padding:9px 20px;border-radius:10px;cursor:pointer}
+  .track-input-row button:hover{opacity:.85}
+  .track-empty{font-size:14px;color:var(--hint);line-height:2;padding:20px 0}
+  .track-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .tcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;position:relative}
+  .tcard.found{border-color:var(--info)}
+  .tcard.gone{opacity:.55}
+  .tcard-no{font-size:22px;font-weight:600;margin-bottom:10px}
+  .tcard-loc{font-size:15px;margin-bottom:4px}
+  .tcard-loc b{font-weight:600}
+  .tcard-stt{font-size:13px;color:var(--muted)}
+  .tcard-dir{font-size:12px;color:var(--hint);margin-top:4px}
+  .tcard-absent{font-size:13px;color:var(--hint);margin-top:8px;line-height:1.5}
+  .tcard-del{position:absolute;top:12px;right:14px;background:transparent;border:none;
+    color:var(--hint);font-size:18px;cursor:pointer;line-height:1;padding:0}
+  .tcard-del:hover{color:var(--danger)}
 </style>
 </head>
 <body>
@@ -108,6 +131,7 @@
   <div class="tabs">
     <button class="tab active" id="tab-alimi">입고 알리미</button>
     <button class="tab" id="tab-all">전체 운행 현황</button>
+    <button class="tab" id="tab-track">열차 추적</button>
   </div>
 
   <div class="statusbar">
@@ -142,6 +166,16 @@
       </div>
     </div>
     <div class="notice" id="notice-all"></div>
+  </div>
+
+  <!-- 페이지 3: 열차 추적 -->
+  <div class="page" id="page-track">
+    <div class="track-input-row">
+      <input id="track-input" type="text" inputmode="numeric" maxlength="6" placeholder="열차번호 입력 (예: 2446)">
+      <button id="track-add">추가</button>
+    </div>
+    <div id="track-empty" class="track-empty">추적할 열차번호를 추가하세요.<br>추가된 열차는 90초마다 자동 갱신됩니다.</div>
+    <div id="track-cards" class="track-cards"></div>
   </div>
 
 </div>
@@ -262,7 +296,7 @@
     document.getElementById("notice-all").textContent="전체 "+list.length+"대 · 내선 "+inner.length+" / 외선 "+outer.length+" / 지선 "+branch.length+" · 신도림 가까운 순";
   }
 
-  function renderBoth(list,err){LATEST=list;renderAlimi(list,err);renderAll(list);}
+  function renderBoth(list,err){LATEST=list;renderAlimi(list,err);renderAll(list);renderTrack(list);}
 
   // ===== 알람 =====
   function showAlarm(no,info){
@@ -280,15 +314,74 @@
   }
   document.getElementById("alarm-dismiss").addEventListener("click",function(){document.getElementById("alarm").classList.remove("show");});
 
+  // ===== 열차 추적 =====
+  var TRACK_LIST=[];
+  (function(){
+    var saved=localStorage.getItem("trackList");
+    if(saved){try{TRACK_LIST=JSON.parse(saved);}catch(e){TRACK_LIST=[];}}
+  })();
+  function saveTrack(){localStorage.setItem("trackList",JSON.stringify(TRACK_LIST));}
+
+  function renderTrack(list){
+    var empty=document.getElementById("track-empty");
+    var cards=document.getElementById("track-cards");
+    if(TRACK_LIST.length===0){empty.style.display="block";cards.innerHTML="";return;}
+    empty.style.display="none";
+    // API 목록을 번호로 인덱싱
+    var map={};
+    (list||[]).forEach(function(t){map[t.trainNo]=t;});
+    var html="";
+    TRACK_LIST.forEach(function(no){
+      var t=map[no];
+      var found=!!t;
+      var updn=found?(t.updnLine==="0"?"내선":"외선"):"";
+      var term=found?(t.statnTnm||""):"";
+      var cls="tcard"+(found?" found":" gone");
+      html+='<div class="'+cls+'">';
+      html+='<button class="tcard-del" data-no="'+no+'">×</button>';
+      html+='<div class="tcard-no">'+no+'</div>';
+      if(found){
+        html+='<div class="tcard-loc"><b>'+t.statnNm+'</b> <span class="tcard-stt">('+(STATUS[t.trainSttus]||"-")+')</span></div>';
+        html+='<div class="tcard-dir">'+updn+(term?" · "+term+" 방면":"")+'</div>';
+      }else{
+        html+='<div class="tcard-absent">현재 운행 목록에 없음<br>운행 전이거나 종착 후일 수 있습니다.</div>';
+      }
+      html+='</div>';
+    });
+    cards.innerHTML=html;
+    // 삭제 버튼 이벤트
+    cards.querySelectorAll(".tcard-del").forEach(function(btn){
+      btn.addEventListener("click",function(){
+        var no=this.getAttribute("data-no");
+        TRACK_LIST=TRACK_LIST.filter(function(n){return n!==no;});
+        saveTrack();renderTrack(LATEST);
+      });
+    });
+  }
+
+  // 추가 버튼
+  document.getElementById("track-add").addEventListener("click",function(){
+    var val=document.getElementById("track-input").value.trim();
+    if(!val){return;}
+    if(TRACK_LIST.indexOf(val)>=0){document.getElementById("track-input").value="";return;}
+    TRACK_LIST.push(val);saveTrack();
+    document.getElementById("track-input").value="";
+    renderTrack(LATEST);
+  });
+  document.getElementById("track-input").addEventListener("keydown",function(e){
+    if(e.key==="Enter") document.getElementById("track-add").click();
+  });
+
   // ===== 탭 전환 =====
   function switchTab(which){
-    ["alimi","all"].forEach(function(w){
+    ["alimi","all","track"].forEach(function(w){
       document.getElementById("tab-"+w).classList.toggle("active",which===w);
       document.getElementById("page-"+w).classList.toggle("active",which===w);
     });
   }
   document.getElementById("tab-alimi").addEventListener("click",function(){switchTab("alimi");});
   document.getElementById("tab-all").addEventListener("click",function(){switchTab("all");});
+  document.getElementById("tab-track").addEventListener("click",function(){switchTab("track");});
 
   // ===== 시계/갱신 =====
   function tick(){
@@ -309,7 +402,7 @@
         document.getElementById("src").textContent="";
         renderBoth(list,null);
       }).catch(function(e){
-        st.innerHTML='⚠️ 연결 실패';
+        st.innerHTML='⚠️ 일시적 오류 · 자동 재시도 중';
         document.getElementById("src").textContent="";
         renderBoth([],e.message||"네트워크 오류");
       });
