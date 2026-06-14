@@ -235,12 +235,32 @@
   function pad(n){return n<10?"0"+n:""+n;}
   function fmtClock(d){return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());}
 
+  // 열차번호 뒤 2자리 매칭 (시간표 번호와 실시간 번호 앞자리가 다를 수 있음)
+  // 예: 시간표 2290 ↔ 실시간 4290 → 뒤 2자리 "90" 일치
+  function tail2(no){return String(no).slice(-3);}
+  function matchSched(trainNo, sched){
+    // 정확히 일치하면 그게 우선
+    if(sched[trainNo]) return trainNo;
+    // 뒤 3자리로 매칭
+    var t2=tail2(trainNo);
+    var keys=Object.keys(sched);
+    for(var i=0;i<keys.length;i++){
+      if(tail2(keys[i])===t2) return keys[i];
+    }
+    return null;
+  }
+
   // ===== 렌더: 입고 알리미 =====
   function renderAlimi(list, err){
     var sched=schedule(),weekend=isHoliday(new Date());
-    document.getElementById("daymode").textContent=weekend?"토·일·공휴일 모드 · 대상 9대":"평일 모드 · 대상 2446";
-    var map={};
-    list.forEach(function(t){if(sched[t.trainNo]&&t.updnLine==="0"){map[t.trainNo]=t;DETECTED=true;}});
+    var schedCount=Object.keys(sched).length;
+    document.getElementById("daymode").textContent=weekend?"토·일·공휴일 모드 · 대상 "+schedCount+"대":"평일 모드 · 대상 "+schedCount+"대";
+    var map={};  // 시간표 번호 → 실시간 데이터
+    list.forEach(function(t){
+      if(t.updnLine!=="0") return;
+      var matched=matchSched(t.trainNo, sched);
+      if(matched){map[matched]=t;DETECTED=true;}
+    });
     var nums=Object.keys(sched),html="";
     nums.forEach(function(no){
       var info=map[no],st=sched[no],found=!!info;
@@ -249,9 +269,9 @@
       html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+'</span><span class="sched">시간표 '+st+'</span></div>';
       if(found){
         var dl=delayMin(st),dt,dc;
-        if(dl>0){dt="+"+dl+"분 지연";dc="late";}else if(dl<0){dt=(-dl)+"분 빠름";dc="early";}else{dt="정시";dc="ontime";}
+        if(dl>0){dt="+"+dl+"분 지연";dc="late";}else{dt="";dc="";}
         html+='<div class="loc"><b>'+info.statnNm+'</b> <span class="stt">('+(STATUS[info.trainSttus]||"-")+')</span></div>';
-        html+='<div class="delay '+dc+'">'+dt+'</div>';
+        if(dt)html+='<div class="delay '+dc+'">'+dt+'</div>';
         if(daerim)html+='<div class="daerim-tag">🔔 대림역</div>';
       }else{
         html+='<div class="wait">운행 목록에 없음<br>(시간표 시각 기준 대기)</div>';
@@ -329,12 +349,15 @@
     var cards=document.getElementById("track-cards");
     if(TRACK_LIST.length===0){empty.style.display="block";cards.innerHTML="";return;}
     empty.style.display="none";
-    // API 목록을 번호로 인덱싱
+    // 뒤 2자리로 매칭 인덱스 생성
     var map={};
-    (list||[]).forEach(function(t){map[t.trainNo]=t;});
+    (list||[]).forEach(function(t){
+      map[t.trainNo]=t;          // 정확히
+      map[tail2(t.trainNo)]=t;   // 뒤 2자리
+    });
     var html="";
     TRACK_LIST.forEach(function(no){
-      var t=map[no];
+      var t=map[no]||map[tail2(no)];
       var found=!!t;
       var updn=found?(t.updnLine==="0"?"내선":"외선"):"";
       var term=found?(t.statnTnm||""):"";
