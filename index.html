@@ -280,15 +280,14 @@
       if(found){
         var dl=delayMin(st),dt,dc;
         if(dl>0){dt="+"+dl+"분 지연";dc="late";}else{dt="";dc="";}
-        // 대림역까지 남은 역 수 계산 (내선 기준)
-        var DAERIM_IDX=LOOP.indexOf("대림");
+        // 신도림역까지 남은 역 수 계산 (내선 기준)
         var curPos=loopPos(info.statnNm);
-        var distToDaerim=curPos>=0?(DAERIM_IDX-curPos+NLOOP)%NLOOP:null;
+        var distToSindorim=curPos>=0?(SIDX-curPos+NLOOP)%NLOOP:null;
         html+='<div class="loc"><b>'+info.statnNm+'</b> <span class="badge s'+info.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[info.trainSttus]||"-")+'</span></div>';
-        if(distToDaerim!==null&&distToDaerim>0){
-          html+='<div style="font-size:12px;color:var(--muted);margin-top:4px">대림역까지 '+distToDaerim+'역</div>';
-        } else if(distToDaerim===0){
-          html+='<div style="font-size:12px;color:var(--danger);margin-top:4px">대림역 도착</div>';
+        if(distToSindorim!==null&&distToSindorim>0){
+          html+='<div style="font-size:12px;color:var(--muted);margin-top:4px">신도림역까지 '+distToSindorim+'역</div>';
+        } else if(distToSindorim===0){
+          html+='<div style="font-size:12px;color:var(--danger);margin-top:4px">신도림역 도착</div>';
         }
         if(dt)html+='<div class="delay '+dc+'">'+dt+'</div>';
         if(daerim)html+='<div class="daerim-tag">🔔 대림역</div>';
