@@ -72,11 +72,21 @@
   .train .no{font-size:17px;font-weight:600;min-width:52px}
   .train .tloc{flex:1;font-size:15px}
   .train .term{font-size:11px;color:var(--hint);margin-top:2px}
-  .badge{font-size:11px;padding:2px 8px;border-radius:6px;white-space:nowrap}
-  .badge.s0{background:#2a3550;color:#9ec3ff}
-  .badge.s1{background:#1f3a2e;color:#7fe0b0}
-  .badge.s2{background:#3a2e1f;color:#e6c07f}
-  .badge.s3{background:#3a2a2a;color:#e0a0a0}
+  .train.sindorim-term{border-color:#e2554a;background:rgba(226,85,74,.07)}
+  .train.sindorim-term .term{color:#e2554a;font-weight:600}
+  .badge{font-size:11px;padding:2px 8px;border-radius:6px;white-space:nowrap;font-weight:600}
+  /* 진입 - 파랑 */
+  .badge.s0{background:rgba(74,144,226,.15);color:#4a90e2}
+  /* 도착 - 초록 */
+  .badge.s1{background:rgba(59,191,122,.15);color:#3bbf7a}
+  /* 출발 - 호박 */
+  .badge.s2{background:rgba(224,169,59,.15);color:#e0a93b}
+  /* 접근 - 보라 */
+  .badge.s3{background:rgba(155,127,224,.15);color:#9b7fe0}
+  body.light .badge.s0{background:rgba(37,99,235,.12);color:#2563eb}
+  body.light .badge.s1{background:rgba(22,163,74,.12);color:#16a34a}
+  body.light .badge.s2{background:rgba(217,119,6,.12);color:#d97706}
+  body.light .badge.s3{background:rgba(124,58,237,.12);color:#7c3aed}
   .empty{font-size:13px;color:var(--hint);padding:20px 4px}
 
   .notice{margin-top:18px;font-size:12px;color:var(--hint);line-height:1.7}
@@ -270,7 +280,7 @@
       if(found){
         var dl=delayMin(st),dt,dc;
         if(dl>0){dt="+"+dl+"분 지연";dc="late";}else{dt="";dc="";}
-        html+='<div class="loc"><b>'+info.statnNm+'</b> <span class="stt">('+(STATUS[info.trainSttus]||"-")+')</span></div>';
+        html+='<div class="loc"><b>'+info.statnNm+'</b> <span class="badge s'+info.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[info.trainSttus]||"-")+'</span></div>';
         if(dt)html+='<div class="delay '+dc+'">'+dt+'</div>';
         if(daerim)html+='<div class="daerim-tag">🔔 대림역</div>';
       }else{
@@ -295,7 +305,8 @@
     var s=t.trainSttus||"",loc=t.statnNm||"",term=t.statnTnm||"";
     var dl="";
     if(typeof dist==="number"&&dist<999){dl=dist===0?"신도림":"신도림까지 "+dist+"역";}
-    var html='<div class="train"><span class="no">'+t.trainNo+'</span>';
+    var isSindorim=term.indexOf("신도림")>=0;
+    var html='<div class="train'+(isSindorim?" sindorim-term":"")+'"><span class="no">'+t.trainNo+'</span>';
     html+='<span class="tloc">'+loc+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
     html+='<span class="badge s'+s+'">'+(STATUS[s]||"-")+'</span></div>';
     return html;
