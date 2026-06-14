@@ -5,12 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>신도림 2호선 열차 모니터</title>
 <style>
-  :root{
+  body{
     --bg:#15161a; --surface:#1e2025; --surface2:#26282e;
     --text:#e8e8ea; --muted:#9a9ba0; --hint:#6b6c72;
     --line:#34363d; --info:#4a90e2; --danger:#e2554a; --danger-bg:#3a1f1d;
     --success:#3bbf7a;
     --inner:#3bbf7a; --outer:#e0a93b; --branch:#9b7fe0;
+  }
+  body.light{
+    --bg:#f4f5f7; --surface:#ffffff; --surface2:#e8eaed;
+    --text:#1a1b1e; --muted:#5f6168; --hint:#9a9ba0;
+    --line:#d8dade; --info:#2563eb; --danger:#dc2626; --danger-bg:#fef2f2;
+    --success:#16a34a;
+    --inner:#16a34a; --outer:#d97706; --branch:#7c3aed;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);
@@ -106,12 +113,10 @@
   <div class="statusbar">
     <span id="status">⏳ 연결 중…</span>
     <span class="src" id="src"></span>
-    <button class="mini" id="btn-test1">테스트: 위치·지연</button>
-    <button class="mini" id="btn-test2">테스트: 대림역 알람</button>
-    <button class="mini" id="btn-live" style="display:none">실시간 복귀</button>
+    <button class="mini" id="btn-sound" style="font-size:15px;padding:3px 10px">🔔</button>
+    <button class="mini" id="btn-theme" style="font-size:15px;padding:3px 10px">🌙</button>
     <span class="right"><span class="clock" id="clock"></span><span class="refresh" id="refresh"></span></span>
   </div>
-
 
   <!-- 페이지 1: 입고 알리미 -->
   <div class="page active" id="page-alimi">
@@ -145,12 +150,13 @@
 (function(){
   // ⚠️ 아래 주소를 본인 Cloudflare Worker 주소로 바꾸세요.
   //    예: https://sindorim-train.본인계정.workers.dev
-  var WORKER_URL="https://sindorim-train.kimkim3764.workers.dev";
+  var WORKER_URL="sindorim-train.kimkim3764.workers.dev";
 
   var SCHED_WEEKDAY={"2446":"21:22"};
   var SCHED_WEEKEND={"2376":"21:01","2388":"21:36","2398":"22:04","2408":"22:35","2412":"22:48","2418":"23:09","2424":"23:30","2428":"23:44","2432":"24:00"};
   var STATUS={"0":"진입","1":"도착","2":"출발","3":"접근"};
-  var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0, TEST_MODE=null;
+  var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0;
+  var SOUND_ON=true;
   var LATEST=[]; // 최근 응답 (탭 전환 시 즉시 재렌더용)
 
   // ===== 공휴일 =====
@@ -169,10 +175,8 @@
   function schedule(){return isHoliday(new Date())?SCHED_WEEKEND:SCHED_WEEKDAY;}
   function schedMin(h){var p=h.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}
   function delayMin(hhmm){
-    var s=schedMin(hhmm);if(s>=1440)s-=1440;var nowMin;
-    if(TEST_MODE){var first=Object.keys(schedule())[0];nowMin=schedMin(schedule()[first])+5;if(nowMin>=1440)nowMin-=1440;}
-    else{var n=new Date();nowMin=n.getHours()*60+n.getMinutes();}
-    return nowMin-s;
+    var s=schedMin(hhmm);if(s>=1440)s-=1440;
+    var n=new Date();return n.getHours()*60+n.getMinutes()-s;
   }
 
   // ===== 본선 역 순서 (신도림 기준 정렬) =====
@@ -194,20 +198,6 @@
 
   function pad(n){return n<10?"0"+n:""+n;}
   function fmtClock(d){return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());}
-
-  // ===== 테스트 데이터 =====
-  function makeTestData(scenario){
-    var sched=schedule(),nums=Object.keys(sched);
-    var stations=["성수","건대입구","잠실","삼성","교대","사당","신림","구로디지털단지","대림","신도림"];
-    var list=[];
-    if(scenario==="loc"){
-      nums.slice(0,5).forEach(function(no,i){list.push({trainNo:no,statnNm:stations[i],updnLine:"0",trainSttus:String(i%4),statnTnm:"성수종착"});});
-    }else if(scenario==="daerim"){
-      list.push({trainNo:nums[0],statnNm:"대림",updnLine:"0",trainSttus:"1",statnTnm:"성수종착"});
-      nums.slice(1,4).forEach(function(no,i){list.push({trainNo:no,statnNm:stations[i],updnLine:"0",trainSttus:String(i%3),statnTnm:"성수종착"});});
-    }
-    return {realtimePositionList:list};
-  }
 
   // ===== 렌더: 입고 알리미 =====
   function renderAlimi(list, err){
@@ -235,7 +225,6 @@
     document.getElementById("cards").innerHTML=html;
     var n="";
     if(err){n="연결 오류: "+err;}
-    else if(TEST_MODE){n="⚠ 테스트 모드입니다. 가짜 데이터로 표시 중 — 실제 운행 정보가 아닙니다.";}
     else if(!DETECTED){n="참고: 아직 대상 입고열차가 실시간 목록에 잡힌 적이 없습니다. 입고열차 운행 시간대(밤)에 확인이 필요합니다.";}
     document.getElementById("notice-alimi").textContent=n;
     // 대림역 알람 체크
@@ -283,6 +272,7 @@
     beep();
   }
   function beep(){
+    if(!SOUND_ON) return;
     try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator(),g=ctx.createGain();
       o.connect(g);g.connect(ctx.destination);o.frequency.value=880;o.type="sine";
       g.gain.setValueAtTime(.3,ctx.currentTime);o.start();
@@ -311,14 +301,6 @@
   // ===== 폴링 =====
   function poll(){
     var st=document.getElementById("status");
-    if(TEST_MODE){
-      LAST_POLL=Date.now();
-      var d=makeTestData(TEST_MODE);
-      st.innerHTML='✅ 테스트 모드('+(TEST_MODE==="loc"?"위치·지연":"대림역 알람")+')';
-      document.getElementById("src").textContent="";
-      renderBoth(d.realtimePositionList,null);
-      return;
-    }
     fetch(WORKER_URL).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
       .then(function(d){
         LAST_POLL=Date.now();
@@ -333,14 +315,29 @@
       });
   }
 
-  // ===== 테스트 버튼 =====
-  function setTest(mode){TEST_MODE=mode;FIRED={};document.getElementById("btn-live").style.display="inline-block";poll();}
-  document.getElementById("btn-test1").addEventListener("click",function(){setTest("loc");});
-  document.getElementById("btn-test2").addEventListener("click",function(){setTest("daerim");});
-  document.getElementById("btn-live").addEventListener("click",function(){
-    TEST_MODE=null;FIRED={};document.getElementById("btn-live").style.display="none";
-    document.getElementById("alarm").classList.remove("show");poll();
-  });
+  // ===== 소리 토글 =====
+  (function(){
+    var btn=document.getElementById("btn-sound");
+    var saved=localStorage.getItem("sound");
+    if(saved==="off"){SOUND_ON=false;btn.textContent="🔕";}
+    btn.addEventListener("click",function(){
+      SOUND_ON=!SOUND_ON;
+      btn.textContent=SOUND_ON?"🔔":"🔕";
+      localStorage.setItem("sound",SOUND_ON?"on":"off");
+    });
+  })();
+
+  // ===== 다크/라이트 모드 =====
+  (function(){
+    var btn=document.getElementById("btn-theme");
+    var saved=localStorage.getItem("theme");
+    if(saved==="light"){document.body.classList.add("light");btn.textContent="☀️";}
+    btn.addEventListener("click",function(){
+      var isLight=document.body.classList.toggle("light");
+      btn.textContent=isLight?"☀️":"🌙";
+      localStorage.setItem("theme",isLight?"light":"dark");
+    });
+  })();
 
   tick();setInterval(tick,1000);
   poll();setInterval(poll,90000);
