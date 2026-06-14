@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>신도림 2호선 열차 모니터</title>
+<style>
+  :root{
+    --bg:#15161a; --surface:#1e2025; --surface2:#26282e;
+    --text:#e8e8ea; --muted:#9a9ba0; --hint:#6b6c72;
+    --line:#34363d; --info:#4a90e2; --danger:#e2554a; --danger-bg:#3a1f1d;
+    --success:#3bbf7a;
+    --inner:#3bbf7a; --outer:#e0a93b; --branch:#9b7fe0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    padding:24px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:22px;font-weight:600;margin:0 0 16px}
+
+  .tabs{display:flex;gap:8px;margin-bottom:8px}
+  .tab{background:var(--surface);border:1px solid var(--line);color:var(--muted);
+    font-size:14px;padding:9px 18px;border-radius:10px;cursor:pointer}
+  .tab.active{background:var(--info);border-color:var(--info);color:#fff;font-weight:600}
+
+  .statusbar{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin:14px 0 20px;flex-wrap:wrap}
+  .right{margin-left:auto;display:flex;align-items:baseline;gap:10px}
+  .clock{font-variant-numeric:tabular-nums}
+  .refresh{font-size:12px;color:var(--hint)}
+  button.mini{margin:0;font-size:12px;padding:4px 10px;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;cursor:pointer}
+  button.mini:hover{background:var(--surface2)}
+
+  .page{display:none}
+  .page.active{display:block}
+
+  /* 입고 알리미 */
+  .daymode{font-size:13px;color:var(--muted);margin-bottom:14px}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:720px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card.daerim{border:2px solid var(--danger)}
+  .card.found{border-color:var(--info)}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline}
+  .train-no{font-size:24px;font-weight:600}
+  .sched{font-size:12px;color:var(--muted)}
+  .loc{margin-top:12px;font-size:16px}
+  .loc b{font-weight:600}
+  .stt{font-size:13px;color:var(--muted)}
+  .delay{margin-top:6px;font-size:13px}
+  .delay.late{color:var(--danger)} .delay.early{color:var(--success)} .delay.ontime{color:var(--muted)}
+  .wait{margin-top:12px;font-size:13px;color:var(--hint);line-height:1.5}
+  .daerim-tag{margin-top:6px;font-size:13px;color:var(--danger)}
+
+  /* 전체 현황 */
+  .columns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+  @media(max-width:900px){.columns{grid-template-columns:1fr}}
+  .col-head{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.inner{background:var(--inner)} .dot.outer{background:var(--outer)} .dot.branch{background:var(--branch)}
+  .colcount{font-size:13px;color:var(--muted);font-weight:400;margin-left:auto}
+  .train{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+  .train .no{font-size:17px;font-weight:600;min-width:52px}
+  .train .tloc{flex:1;font-size:15px}
+  .train .term{font-size:11px;color:var(--hint);margin-top:2px}
+  .badge{font-size:11px;padding:2px 8px;border-radius:6px;white-space:nowrap}
+  .badge.s0{background:#2a3550;color:#9ec3ff}
+  .badge.s1{background:#1f3a2e;color:#7fe0b0}
+  .badge.s2{background:#3a2e1f;color:#e6c07f}
+  .badge.s3{background:#3a2a2a;color:#e0a0a0}
+  .empty{font-size:13px;color:var(--hint);padding:20px 4px}
+
+  .notice{margin-top:18px;font-size:12px;color:var(--hint);line-height:1.7}
+
+  .alarm{display:none;position:fixed;inset:0;background:var(--danger-bg);
+    align-items:center;justify-content:center;text-align:center;z-index:99;padding:24px}
+  .alarm.show{display:flex}
+  .alarm-train{font-size:64px;font-weight:700;color:var(--danger);margin-top:8px}
+  .alarm-msg{font-size:26px;color:var(--danger);margin-top:4px}
+  .alarm-sub{font-size:16px;color:var(--text);opacity:.8;margin-top:16px}
+  .alarm button{margin-top:24px;background:transparent;border:1px solid var(--danger);
+    color:var(--danger);font-size:16px;padding:10px 28px;border-radius:10px;cursor:pointer}
+  .alarm button:hover{background:rgba(226,85,74,.12)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="alarm" id="alarm">
+    <div>
+      <div style="font-size:80px;line-height:1">🔔</div>
+      <div class="alarm-train" id="alarm-train">2446</div>
+      <div class="alarm-msg">대림역 도착</div>
+      <div class="alarm-sub" id="alarm-sub"></div>
+      <button id="alarm-dismiss">확인</button>
+    </div>
+  </div>
+
+  <h1>신도림 2호선 열차 모니터</h1>
+
+  <div class="tabs">
+    <button class="tab active" id="tab-alimi">입고 알리미</button>
+    <button class="tab" id="tab-all">전체 운행 현황</button>
+  </div>
+
+  <div class="statusbar">
+    <span id="status">⏳ 연결 중…</span>
+    <span class="src" id="src"></span>
+    <!-- <button class="mini" id="btn-test1">테스트: 위치·지연</button>
+    <button class="mini" id="btn-test2">테스트: 대림역 알람</button>
+    <button class="mini" id="btn-live" style="display:none">실시간 복귀</button> -->
+    <span class="right"><span class="clock" id="clock"></span><span class="refresh" id="refresh"></span></span>
+  </div>
+
+  <!-- 페이지 1: 입고 알리미 -->
+  <div class="page active" id="page-alimi">
+    <div class="daymode" id="daymode"></div>
+    <div class="cards" id="cards"></div>
+    <div class="notice" id="notice-alimi"></div>
+  </div>
+
+  <!-- 페이지 2: 전체 현황 -->
+  <div class="page" id="page-all">
+    <div class="columns">
+      <div>
+        <div class="col-head"><span class="dot inner"></span> 내선 <span class="colcount" id="cnt-inner"></span></div>
+        <div id="list-inner"></div>
+      </div>
+      <div>
+        <div class="col-head"><span class="dot outer"></span> 외선 <span class="colcount" id="cnt-outer"></span></div>
+        <div id="list-outer"></div>
+      </div>
+      <div>
+        <div class="col-head"><span class="dot branch"></span> 지선 <span class="colcount" id="cnt-branch"></span></div>
+        <div id="list-branch"></div>
+      </div>
+    </div>
+    <div class="notice" id="notice-all"></div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // ⚠️ 아래 주소를 본인 Cloudflare Worker 주소로 바꾸세요.
+  //    예: https://sindorim-train.본인계정.workers.dev
+  var WORKER_URL="https://sindorim-train.kimkim3764.workers.dev";
+
+  var SCHED_WEEKDAY={"2446":"21:22"};
+  var SCHED_WEEKEND={"2376":"21:01","2388":"21:36","2398":"22:04","2408":"22:35","2412":"22:48","2418":"23:09","2424":"23:30","2428":"23:44","2432":"24:00"};
+  var STATUS={"0":"진입","1":"도착","2":"출발","3":"접근"};
+  var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0, TEST_MODE=null;
+  var LATEST=[]; // 최근 응답 (탭 전환 시 즉시 재렌더용)
+
+  // ===== 공휴일 =====
+  var HOLIDAYS={
+    "2026-01-01":1,"2026-02-16":1,"2026-02-17":1,"2026-02-18":1,
+    "2026-03-02":1,"2026-05-05":1,"2026-05-25":1,"2026-06-03":1,
+    "2026-07-17":1,"2026-08-17":1,"2026-09-24":1,"2026-09-25":1,
+    "2026-10-05":1,"2026-10-09":1,"2026-12-25":1,
+    "2027-01-01":1,"2027-02-08":1,"2027-02-09":1,"2027-02-10":1,
+    "2027-03-01":1,"2027-05-05":1,"2027-05-13":1,"2027-07-19":1,
+    "2027-08-16":1,"2027-09-14":1,"2027-09-15":1,"2027-09-16":1,
+    "2027-10-04":1,"2027-10-11":1,"2027-12-27":1
+  };
+  function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+  function isHoliday(d){var x=d.getDay();if(x===0||x===6)return true;return !!HOLIDAYS[ymd(d)];}
+  function schedule(){return isHoliday(new Date())?SCHED_WEEKEND:SCHED_WEEKDAY;}
+  function schedMin(h){var p=h.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}
+  function delayMin(hhmm){
+    var s=schedMin(hhmm);if(s>=1440)s-=1440;var nowMin;
+    if(TEST_MODE){var first=Object.keys(schedule())[0];nowMin=schedMin(schedule()[first])+5;if(nowMin>=1440)nowMin-=1440;}
+    else{var n=new Date();nowMin=n.getHours()*60+n.getMinutes();}
+    return nowMin-s;
+  }
+
+  // ===== 본선 역 순서 (신도림 기준 정렬) =====
+  var LOOP=["시청","을지로입구","을지로3가","을지로4가","동대문역사문화공원","신당","상왕십리","왕십리","한양대","뚝섬","성수","건대입구","구의","강변","잠실나루","잠실","신천","종합운동장","삼성","선릉","역삼","강남","교대","서초","방배","사당","낙성대","서울대입구","봉천","신림","신대방","구로디지털단지","대림","신도림","문래","영등포구청","당산","합정","홍대입구","신촌","이대","아현","충정로"];
+  var NLOOP=LOOP.length, SIDX=LOOP.indexOf("신도림");
+  function loopPos(name){var n=name||"";var p=LOOP.indexOf(n);if(p>=0)return p;for(var i=0;i<NLOOP;i++){if(n.indexOf(LOOP[i])>=0)return i;}return -1;}
+  function distInner(name){var p=loopPos(name);if(p<0)return 999;return (SIDX-p+NLOOP)%NLOOP;}
+  function distOuter(name){var p=loopPos(name);if(p<0)return 999;return (p-SIDX+NLOOP)%NLOOP;}
+
+  // ===== 지선 판별 =====
+  var BRANCH_STATIONS=["용답","신답","용두","도림천","양천구청"];
+  var BRANCH_TNM=["지선","신설동","까치산"];
+  function isBranch(t){
+    if(BRANCH_STATIONS.indexOf(t.statnNm)>=0)return true;
+    var tnm=t.statnTnm||"";
+    for(var i=0;i<BRANCH_TNM.length;i++){if(tnm.indexOf(BRANCH_TNM[i])>=0)return true;}
+    return false;
+  }
+
+  function pad(n){return n<10?"0"+n:""+n;}
+  function fmtClock(d){return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());}
+
+  // ===== 테스트 데이터 =====
+  function makeTestData(scenario){
+    var sched=schedule(),nums=Object.keys(sched);
+    var stations=["성수","건대입구","잠실","삼성","교대","사당","신림","구로디지털단지","대림","신도림"];
+    var list=[];
+    if(scenario==="loc"){
+      nums.slice(0,5).forEach(function(no,i){list.push({trainNo:no,statnNm:stations[i],updnLine:"0",trainSttus:String(i%4),statnTnm:"성수종착"});});
+    }else if(scenario==="daerim"){
+      list.push({trainNo:nums[0],statnNm:"대림",updnLine:"0",trainSttus:"1",statnTnm:"성수종착"});
+      nums.slice(1,4).forEach(function(no,i){list.push({trainNo:no,statnNm:stations[i],updnLine:"0",trainSttus:String(i%3),statnTnm:"성수종착"});});
+    }
+    return {realtimePositionList:list};
+  }
+
+  // ===== 렌더: 입고 알리미 =====
+  function renderAlimi(list, err){
+    var sched=schedule(),weekend=isHoliday(new Date());
+    document.getElementById("daymode").textContent=weekend?"토·일·공휴일 모드 · 대상 9대":"평일 모드 · 대상 2446";
+    var map={};
+    list.forEach(function(t){if(sched[t.trainNo]&&t.updnLine==="0"){map[t.trainNo]=t;DETECTED=true;}});
+    var nums=Object.keys(sched),html="";
+    nums.forEach(function(no){
+      var info=map[no],st=sched[no],found=!!info;
+      var daerim=found&&info.statnNm.indexOf("대림")>=0;
+      var cls="card"+(daerim?" daerim":(found?" found":""));
+      html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+'</span><span class="sched">시간표 '+st+'</span></div>';
+      if(found){
+        var dl=delayMin(st),dt,dc;
+        if(dl>0){dt="+"+dl+"분 지연";dc="late";}else if(dl<0){dt=(-dl)+"분 빠름";dc="early";}else{dt="정시";dc="ontime";}
+        html+='<div class="loc"><b>'+info.statnNm+'</b> <span class="stt">('+(STATUS[info.trainSttus]||"-")+')</span></div>';
+        html+='<div class="delay '+dc+'">'+dt+'</div>';
+        if(daerim)html+='<div class="daerim-tag">🔔 대림역</div>';
+      }else{
+        html+='<div class="wait">운행 목록에 없음<br>(시간표 시각 기준 대기)</div>';
+      }
+      html+='</div>';
+    });
+    document.getElementById("cards").innerHTML=html;
+    var n="";
+    if(err){n="연결 오류: "+err;}
+    else if(TEST_MODE){n="⚠ 테스트 모드입니다. 가짜 데이터로 표시 중 — 실제 운행 정보가 아닙니다.";}
+    else if(!DETECTED){n="참고: 아직 대상 입고열차가 실시간 목록에 잡힌 적이 없습니다. 입고열차 운행 시간대(밤)에 확인이 필요합니다.";}
+    document.getElementById("notice-alimi").textContent=n;
+    // 대림역 알람 체크
+    nums.forEach(function(no){
+      var info=map[no];
+      if(info&&info.statnNm.indexOf("대림")>=0&&!FIRED[no]){FIRED[no]=true;showAlarm(no,info);}
+    });
+  }
+
+  // ===== 렌더: 전체 현황 =====
+  function trainRow(t,dist){
+    var s=t.trainSttus||"",loc=t.statnNm||"",term=t.statnTnm||"";
+    var dl="";
+    if(typeof dist==="number"&&dist<999){dl=dist===0?"신도림":"신도림까지 "+dist+"역";}
+    var html='<div class="train"><span class="no">'+t.trainNo+'</span>';
+    html+='<span class="tloc">'+loc+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
+    html+='<span class="badge s'+s+'">'+(STATUS[s]||"-")+'</span></div>';
+    return html;
+  }
+  function renderAll(list){
+    var inner=[],outer=[],branch=[];
+    list.forEach(function(t){
+      if(isBranch(t)){branch.push(t);return;}
+      if(t.updnLine==="0")inner.push(t);else outer.push(t);
+    });
+    inner.sort(function(a,b){return distInner(a.statnNm)-distInner(b.statnNm);});
+    outer.sort(function(a,b){return distOuter(a.statnNm)-distOuter(b.statnNm);});
+    branch.sort(function(a,b){return (a.statnNm||"").localeCompare(b.statnNm||"","ko");});
+    document.getElementById("list-inner").innerHTML=inner.length?inner.map(function(t){return trainRow(t,distInner(t.statnNm));}).join(""):'<div class="empty">내선 열차 없음</div>';
+    document.getElementById("list-outer").innerHTML=outer.length?outer.map(function(t){return trainRow(t,distOuter(t.statnNm));}).join(""):'<div class="empty">외선 열차 없음</div>';
+    document.getElementById("list-branch").innerHTML=branch.length?branch.map(function(t){return trainRow(t,null);}).join(""):'<div class="empty">지선 열차 없음</div>';
+    document.getElementById("cnt-inner").textContent=inner.length+"대";
+    document.getElementById("cnt-outer").textContent=outer.length+"대";
+    document.getElementById("cnt-branch").textContent=branch.length+"대";
+    document.getElementById("notice-all").textContent="전체 "+list.length+"대 · 내선 "+inner.length+" / 외선 "+outer.length+" / 지선 "+branch.length+" · 신도림 가까운 순";
+  }
+
+  function renderBoth(list,err){LATEST=list;renderAlimi(list,err);renderAll(list);}
+
+  // ===== 알람 =====
+  function showAlarm(no,info){
+    document.getElementById("alarm-train").textContent=no;
+    document.getElementById("alarm-sub").textContent="현재: "+info.statnNm+" "+(STATUS[info.trainSttus]||"")+" · 시간표 "+(schedule()[no]||"");
+    document.getElementById("alarm").classList.add("show");
+    beep();
+  }
+  function beep(){
+    try{var ctx=new (window.AudioContext||window.webkitAudioContext)();var o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);o.frequency.value=880;o.type="sine";
+      g.gain.setValueAtTime(.3,ctx.currentTime);o.start();
+      g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+1.2);o.stop(ctx.currentTime+1.2);}catch(e){}
+  }
+  document.getElementById("alarm-dismiss").addEventListener("click",function(){document.getElementById("alarm").classList.remove("show");});
+
+  // ===== 탭 전환 =====
+  function switchTab(which){
+    ["alimi","all"].forEach(function(w){
+      document.getElementById("tab-"+w).classList.toggle("active",which===w);
+      document.getElementById("page-"+w).classList.toggle("active",which===w);
+    });
+  }
+  document.getElementById("tab-alimi").addEventListener("click",function(){switchTab("alimi");});
+  document.getElementById("tab-all").addEventListener("click",function(){switchTab("all");});
+
+  // ===== 시계/갱신 =====
+  function tick(){
+    document.getElementById("clock").textContent=fmtClock(new Date());
+    var el=document.getElementById("refresh");
+    if(LAST_POLL===0){el.textContent="갱신 대기";}
+    else{var left=90-Math.floor((Date.now()-LAST_POLL)/1000);if(left<0)left=0;el.textContent="다음 갱신 "+left+"초";}
+  }
+
+  // ===== 폴링 =====
+  function poll(){
+    var st=document.getElementById("status");
+    if(TEST_MODE){
+      LAST_POLL=Date.now();
+      var d=makeTestData(TEST_MODE);
+      st.innerHTML='✅ 테스트 모드('+(TEST_MODE==="loc"?"위치·지연":"대림역 알람")+')';
+      document.getElementById("src").textContent="";
+      renderBoth(d.realtimePositionList,null);
+      return;
+    }
+    fetch(WORKER_URL).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+      .then(function(d){
+        LAST_POLL=Date.now();
+        var list=(d&&d.realtimePositionList)||[];
+        st.innerHTML='✅ 실시간 연결됨 · 전체 '+list.length+'대';
+        document.getElementById("src").textContent="";
+        renderBoth(list,null);
+      }).catch(function(e){
+        st.innerHTML='⚠️ 연결 실패';
+        document.getElementById("src").textContent="";
+        renderBoth([],e.message||"네트워크 오류");
+      });
+  }
+
+  // ===== 테스트 버튼 =====
+  function setTest(mode){TEST_MODE=mode;FIRED={};document.getElementById("btn-live").style.display="inline-block";poll();}
+  document.getElementById("btn-test1").addEventListener("click",function(){setTest("loc");});
+  document.getElementById("btn-test2").addEventListener("click",function(){setTest("daerim");});
+  document.getElementById("btn-live").addEventListener("click",function(){
+    TEST_MODE=null;FIRED={};document.getElementById("btn-live").style.display="none";
+    document.getElementById("alarm").classList.remove("show");poll();
+  });
+
+  tick();setInterval(tick,1000);
+  poll();setInterval(poll,90000);
+})();
+</script>
+</body>
+</html>
