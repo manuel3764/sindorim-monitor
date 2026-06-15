@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>신도림 2호선 열차 모니터</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%232f7d4f'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3E2%3C/text%3E%3C/svg%3E">
 <style>
   body{
     --bg:#15161a; --surface:#1e2025; --surface2:#26282e;
@@ -55,6 +56,9 @@
   .stable-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;
     background:rgba(155,127,224,.18);color:#9b7fe0;margin-left:8px;vertical-align:middle}
   body.light .stable-badge{background:rgba(124,58,237,.12);color:#7c3aed}
+  .ingo-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;
+    background:rgba(74,144,226,.15);color:#4a90e2;margin-left:8px;vertical-align:middle}
+  body.light .ingo-badge{background:rgba(37,99,235,.12);color:#2563eb}
   .sched{font-size:12px;color:var(--muted)}
   .loc{margin-top:12px;font-size:16px}
   .loc b{font-weight:600}
@@ -113,6 +117,21 @@
     font-size:14px;font-weight:600;padding:9px 20px;border-radius:10px;cursor:pointer}
   .track-input-row button:hover{opacity:.85}
   .track-empty{font-size:14px;color:var(--hint);line-height:2;padding:20px 0}
+
+  /* 입출고 시간표 */
+  .sched-daytabs{display:flex;gap:8px;margin-bottom:20px}
+  .sched-daytab{background:var(--surface);border:1px solid var(--line);color:var(--muted);
+    font-size:13px;padding:7px 16px;border-radius:8px;cursor:pointer}
+  .sched-daytab.active{background:var(--info);border-color:var(--info);color:#fff;font-weight:600}
+  .sched-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .sched-col-head{font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  .sched-row{display:flex;justify-content:space-between;align-items:center;
+    padding:13px 16px;border-radius:10px;margin-bottom:6px;background:var(--surface);gap:8px}
+  .sched-row:hover{background:var(--surface2)}
+  .sched-row.stable{background:rgba(155,127,224,.1);border-left:3px solid #9b7fe0}
+  .sched-row.alimi{background:rgba(59,191,122,.08);border-left:3px solid var(--success)}
+  .sched-no{font-size:22px;font-weight:700;color:var(--text);white-space:nowrap}
+  .sched-time{font-size:22px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
   .track-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
   .tcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;position:relative}
   .tcard.found{border-color:var(--info)}
@@ -155,6 +174,7 @@
 
   <div class="tabs">
     <button class="tab active" id="tab-alimi">입고 알리미</button>
+    <button class="tab" id="tab-sched">입고 시간표</button>
     <button class="tab" id="tab-all">전체 운행 현황</button>
     <button class="tab" id="tab-track">열차 추적</button>
   </div>
@@ -198,8 +218,28 @@
       <input id="track-input" type="text" inputmode="numeric" maxlength="6" placeholder="열차번호 입력 (예: 2446)">
       <button id="track-add">추가</button>
     </div>
-    <div id="track-empty" class="track-empty">추적할 열차번호를 추가하세요.<br>추가된 열차는 30초마다 자동 갱신됩니다.</div>
+    <div id="track-empty" class="track-empty">추적할 열차번호를 추가하세요.<br>추가된 열차는 90초마다 자동 갱신됩니다.</div>
     <div id="track-cards" class="track-cards"></div>
+  </div>
+
+  <!-- 페이지 4: 입고 시간표 -->
+  <div class="page" id="page-sched">
+    <div class="sched-daytabs">
+      <button class="sched-daytab active" id="sdtab-week">평일</button>
+      <button class="sched-daytab" id="sdtab-weekend">토·일·공휴일</button>
+    </div>
+    <div id="sched-week-content">
+      <div class="sched-cols">
+        <div><div class="sched-col-head">내선 입고 (18)</div><div id="sw-inner-in"></div></div>
+        <div><div class="sched-col-head">외선 입고 (23)</div><div id="sw-outer-in"></div></div>
+      </div>
+    </div>
+    <div id="sched-weekend-content" style="display:none">
+      <div class="sched-cols">
+        <div><div class="sched-col-head">내선 입고 (13)</div><div id="se-inner-in"></div></div>
+        <div><div class="sched-col-head">외선 입고 (12)</div><div id="se-outer-in"></div></div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -297,7 +337,8 @@
       var isStable=!!STABLE_TRAINS[no];
       var cls="card"+(daerim?" daerim":(found?" found":""));
       var stableBadge=isStable?' <span class="stable-badge">주박</span>':'';
-      html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+stableBadge+'</span><span class="sched">시간표 '+st+'</span></div>';
+      var ingoBadge=!isStable?' <span class="ingo-badge">입고</span>':'';
+      html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+stableBadge+ingoBadge+'</span><span class="sched">시간표 '+st+'</span></div>';
       if(found){
         var dl=delayMin(st),dt,dc;
         if(dl>0){dt="+"+dl+"분 지연";dc="late";}else{dt="";dc="";}
@@ -471,7 +512,7 @@
 
   // ===== 탭 전환 =====
   function switchTab(which){
-    ["alimi","all","track"].forEach(function(w){
+    ["alimi","sched","all","track"].forEach(function(w){
       document.getElementById("tab-"+w).classList.toggle("active",which===w);
       document.getElementById("page-"+w).classList.toggle("active",which===w);
     });
@@ -480,12 +521,88 @@
   document.getElementById("tab-all").addEventListener("click",function(){switchTab("all");});
   document.getElementById("tab-track").addEventListener("click",function(){switchTab("track");});
 
+  // ===== 입출고 시간표 데이터 =====
+  var TIMETABLE={
+    week:{
+      inner:{
+        out:[["2006","05:30"],["2008","05:37"],["2012","05:50"],["2014","05:57"],["2018","06:09"],["2020","06:16"],["2024","06:26"],["2034","06:51"],["2040","07:04"],["2050","07:24"],["2058","07:38"],["2272","15:41"],["2300","16:58"],["2314","17:29"],["2320","17:41"],["2326","17:53"],["2330","17:59"],["2344","18:23"]],
+        in: [["2144","10:04"],["2152","10:16"],["2158","10:29"],["2164","10:43"],["2176","11:09"],["2184","11:28"],["2190","11:40"],["2396","19:49"],["2426","20:37"],["2434","20:55"],["2446","21:22"],["2482","23:00"],["2486","23:11"],["2490","23:24"],["2500","23:58"],["2504","24:09"],["2510","24:27"],["2516","25:00"]]
+      },
+      outer:{
+        out:[["2005","05:30"],["2007","05:36"],["2011","05:48"],["2015","06:00"],["2019","06:13"],["2023","06:23"],["2027","06:33"],["2031","06:43"],["2035","06:52"],["2043","07:09"],["2051","07:21"],["2059","07:33"],["2063","07:40"],["2067","07:45"],["2069","07:48"],["2073","07:53"],["2077","07:58"],["2081","08:03"],["2085","08:08"],["2089","08:13"],["2601","08:18"],["2849","10:93"],["2847","17:29"]],
+        in: [["2121","09:02"],["2129","09:15"],["2603","09:49"],["2159","09:56"],["2165","10:05"],["2173","10:20"],["2189","10:56"],["2195","11:07"],["2409","19:24"],["2415","19:35"],["2421","19:45"],["2427","19:56"],["2439","20:20"],["2459","21:19"],["2467","21:39"],["2471","21:48"],["2493","23:00"],["2503","23:35"],["2507","23:46"],["2511","24:02"],["2515","24:16"],["2519","24:35"],["2523","25:00"]]
+      }
+    },
+    weekend:{
+      inner:{
+        out:[["2006","05:30"],["2008","05:37"],["2012","05:49"],["2014","05:55"],["2018","06:07"],["2020","06:13"],["2024","06:24"],["2030","06:41"],["2098","09:43"],["2126","10:52"],["2308","18:00"]],
+        in: [["2258","16:04"],["2290","17:22"],["2298","17:40"],["2316","18:17"],["2376","21:01"],["2388","21:36"],["2398","22:04"],["2408","22:35"],["2412","22:48"],["2418","23:09"],["2424","23:30"],["2428","23:44"],["2432","24:00"]]
+      },
+      outer:{
+        out:[["2005","05:30"],["2007","05:36"],["2011","05:47"],["2015","05:58"],["2017","06:04"],["2021","06:15"],["2053","07:49"],["2071","08:38"],["2083","09:06"],["2105","09:59"],["2115","10:24"],["2231","13:10"],["2331","19:16"],["2331","19:16"]],
+        in: [["2103","09:57"],["2229","15:07"],["2255","16:07"],["2267","16:33"],["2305","18:10"],["2329","19:12"],["2397","22:28"],["2403","22:46"],["2413","23:19"],["2417","23:35"],["2421","23:55"],["2423","24:00"]]
+      }
+    }
+  };
+
+  // 입고 알리미 대상 열차 (평일+주말 합산)
+  var ALIMI_TRAINS={"2446":1,"2516":1,"2376":1,"2388":1,"2398":1,"2408":1,"2412":1,"2418":1,"2424":1,"2428":1,"2432":1};
+
+  function schedRow(no, time){
+    var isStable=(no==="2516"||no==="2432");
+    var isAlimi=!!ALIMI_TRAINS[no];
+    var rowCls="sched-row"+(isStable?" stable":(isAlimi?" alimi":""));
+    return '<div class="'+rowCls+'">'
+      +'<span class="sched-no">'+no
+      +(isStable?' <span class="stable-badge">주박</span>':'')
+      +(isAlimi&&!isStable?' <span class="ingo-badge">입고</span>':'')
+      +'</span>'
+      +'<span class="sched-time">'+time+'</span></div>';
+  }
+  function renderSchedList(id, rows){
+    var el=document.getElementById(id);
+    if(!el) return;
+    el.innerHTML=rows.map(function(r){return schedRow(r[0],r[1]);}).join("");
+  }
+  function renderSched(){
+    var d=TIMETABLE.week;
+    renderSchedList("sw-inner-in",d.inner.in);
+    renderSchedList("sw-outer-in",d.outer.in);
+    var e=TIMETABLE.weekend;
+    renderSchedList("se-inner-in",e.inner.in);
+    renderSchedList("se-outer-in",e.outer.in);
+  }
+  renderSched();
+
+  // 시간표 평일/주말 탭
+  // 시간표 탭 진입 시 오늘 요일에 맞게 자동 전환
+  document.getElementById("tab-sched").addEventListener("click",function(){
+    switchTab("sched");
+    if(isHoliday(serviceDate())){
+      document.getElementById("sdtab-weekend").click();
+    } else {
+      document.getElementById("sdtab-week").click();
+    }
+  });
+  document.getElementById("sdtab-week").addEventListener("click",function(){
+    this.classList.add("active");
+    document.getElementById("sdtab-weekend").classList.remove("active");
+    document.getElementById("sched-week-content").style.display="";
+    document.getElementById("sched-weekend-content").style.display="none";
+  });
+  document.getElementById("sdtab-weekend").addEventListener("click",function(){
+    this.classList.add("active");
+    document.getElementById("sdtab-week").classList.remove("active");
+    document.getElementById("sched-week-content").style.display="none";
+    document.getElementById("sched-weekend-content").style.display="";
+  });
+
   // ===== 시계/갱신 =====
   function tick(){
     document.getElementById("clock").textContent=fmtClock(new Date());
     var el=document.getElementById("refresh");
     if(LAST_POLL===0){el.textContent="갱신 대기";}
-    else{var left=30-Math.floor((Date.now()-LAST_POLL)/1000);if(left<0)left=0;el.textContent="다음 갱신 "+left+"초";}
+    else{var left=90-Math.floor((Date.now()-LAST_POLL)/1000);if(left<0)left=0;el.textContent="다음 갱신 "+left+"초";}
   }
 
   // ===== 폴링 =====
@@ -527,7 +644,7 @@
   })();
 
   tick();setInterval(tick,1000);
-  poll();setInterval(poll,30000);
+  poll();setInterval(poll,90000);
 })();
 </script>
 </body>
