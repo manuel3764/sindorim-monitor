@@ -198,7 +198,7 @@
       <input id="track-input" type="text" inputmode="numeric" maxlength="6" placeholder="열차번호 입력 (예: 2446)">
       <button id="track-add">추가</button>
     </div>
-    <div id="track-empty" class="track-empty">추적할 열차번호를 추가하세요.<br>추가된 열차는 90초마다 자동 갱신됩니다.</div>
+    <div id="track-empty" class="track-empty">추적할 열차번호를 추가하세요.<br>추가된 열차는 30초마다 자동 갱신됩니다.</div>
     <div id="track-cards" class="track-cards"></div>
   </div>
 
@@ -485,7 +485,7 @@
     document.getElementById("clock").textContent=fmtClock(new Date());
     var el=document.getElementById("refresh");
     if(LAST_POLL===0){el.textContent="갱신 대기";}
-    else{var left=90-Math.floor((Date.now()-LAST_POLL)/1000);if(left<0)left=0;el.textContent="다음 갱신 "+left+"초";}
+    else{var left=30-Math.floor((Date.now()-LAST_POLL)/1000);if(left<0)left=0;el.textContent="다음 갱신 "+left+"초";}
   }
 
   // ===== 폴링 =====
