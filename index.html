@@ -52,6 +52,9 @@
   .card.found{border-color:var(--info)}
   .card-head{display:flex;justify-content:space-between;align-items:baseline}
   .train-no{font-size:24px;font-weight:600}
+  .stable-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;
+    background:rgba(155,127,224,.18);color:#9b7fe0;margin-left:8px;vertical-align:middle}
+  body.light .stable-badge{background:rgba(124,58,237,.12);color:#7c3aed}
   .sched{font-size:12px;color:var(--muted)}
   .loc{margin-top:12px;font-size:16px}
   .loc b{font-weight:600}
@@ -123,6 +126,16 @@
   .tcard-del{position:absolute;top:12px;right:14px;background:transparent;border:none;
     color:var(--hint);font-size:18px;cursor:pointer;line-height:1;padding:0}
   .tcard-del:hover{color:var(--danger)}
+  .track-toggle{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:12px;padding-top:12px;
+    border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+  .tsw{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0}
+  .tsw input{opacity:0;width:0;height:0;position:absolute}
+  .tsw-slider{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--line);
+    border-radius:11px;cursor:pointer;transition:background .2s ease}
+  .tsw-slider::before{content:"";position:absolute;width:16px;height:16px;left:2px;top:2px;
+    background:#fff;border-radius:50%;transition:transform .2s ease;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .tsw input:checked + .tsw-slider{background:var(--info);border-color:var(--info)}
+  .tsw input:checked + .tsw-slider::before{transform:translateX(18px)}
 </style>
 </head>
 <body>
@@ -132,7 +145,7 @@
     <div>
       <div style="font-size:80px;line-height:1">🔔</div>
       <div class="alarm-train" id="alarm-train">2446</div>
-      <div class="alarm-msg">대림역 도착</div>
+      <div class="alarm-msg" id="alarm-msg">대림역 도착</div>
       <div class="alarm-sub" id="alarm-sub"></div>
       <button id="alarm-dismiss">확인</button>
     </div>
@@ -197,8 +210,10 @@
   //    예: https://sindorim-train.본인계정.workers.dev
   var WORKER_URL="https://sindorim-train.kimkim3764.workers.dev";
 
-  var SCHED_WEEKDAY={"2446":"21:22"};
+  var SCHED_WEEKDAY={"2446":"21:22","2516":"25:00"};
   var SCHED_WEEKEND={"2376":"21:01","2388":"21:36","2398":"22:04","2408":"22:35","2412":"22:48","2418":"23:09","2424":"23:30","2428":"23:44","2432":"24:00"};
+  // 주박열차 (차량기지에 밤새 머무는 열차)
+  var STABLE_TRAINS={"2516":1,"2432":1};
   var STATUS={"0":"진입","1":"도착","2":"출발","3":"접근"};
   var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0;
   var LATEST=[]; // 최근 응답 (탭 전환 시 즉시 재렌더용)
@@ -215,8 +230,14 @@
     "2027-10-04":1,"2027-10-11":1,"2027-12-27":1
   };
   function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+  // 운행일 기준 날짜: 새벽 1시 이전은 전날로 취급 (지하철은 다음날 새벽 1시까지 운행)
+  function serviceDate(){
+    var d=new Date();
+    if(d.getHours()<1){d=new Date(d.getTime()-2*60*60*1000);} // 1시 이전이면 2시간 빼서 확실히 전날로
+    return d;
+  }
   function isHoliday(d){var x=d.getDay();if(x===0||x===6)return true;return !!HOLIDAYS[ymd(d)];}
-  function schedule(){return isHoliday(new Date())?SCHED_WEEKEND:SCHED_WEEKDAY;}
+  function schedule(){return isHoliday(serviceDate())?SCHED_WEEKEND:SCHED_WEEKDAY;}
   function schedMin(h){var p=h.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}
   function delayMin(hhmm){
     var s=schedMin(hhmm);if(s>=1440)s-=1440;
@@ -260,7 +281,7 @@
 
   // ===== 렌더: 입고 알리미 =====
   function renderAlimi(list, err){
-    var sched=schedule(),weekend=isHoliday(new Date());
+    var sched=schedule(),weekend=isHoliday(serviceDate());
     var schedCount=Object.keys(sched).length;
     document.getElementById("daymode").textContent=weekend?"토·일·공휴일 모드 · 대상 "+schedCount+"대":"평일 모드 · 대상 "+schedCount+"대";
     var map={};  // 시간표 번호 → 실시간 데이터
@@ -273,8 +294,10 @@
     nums.forEach(function(no){
       var info=map[no],st=sched[no],found=!!info;
       var daerim=found&&info.statnNm.indexOf("대림")>=0;
+      var isStable=!!STABLE_TRAINS[no];
       var cls="card"+(daerim?" daerim":(found?" found":""));
-      html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+'</span><span class="sched">시간표 '+st+'</span></div>';
+      var stableBadge=isStable?' <span class="stable-badge">주박</span>':'';
+      html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+stableBadge+'</span><span class="sched">시간표 '+st+'</span></div>';
       if(found){
         var dl=delayMin(st),dt,dc;
         if(dl>0){dt="+"+dl+"분 지연";dc="late";}else{dt="";dc="";}
@@ -339,16 +362,27 @@
   // ===== 알람 =====
   function showAlarm(no,info){
     document.getElementById("alarm-train").textContent=no;
+    document.getElementById("alarm-msg").textContent=info.statnNm+" 도착";
     document.getElementById("alarm-sub").textContent="현재: "+info.statnNm+" "+(STATUS[info.trainSttus]||"")+" · 시간표 "+(schedule()[no]||"");
     document.getElementById("alarm").classList.add("show");
   }
   document.getElementById("alarm-dismiss").addEventListener("click",function(){document.getElementById("alarm").classList.remove("show");});
 
   // ===== 열차 추적 =====
+  // 각 항목: {no:"2446", alert:true}  (alert=신도림 도착 알림 on/off)
   var TRACK_LIST=[];
+  var TRACK_FIRED={};  // 알림 중복 방지
   (function(){
     var saved=localStorage.getItem("trackList");
-    if(saved){try{TRACK_LIST=JSON.parse(saved);}catch(e){TRACK_LIST=[];}}
+    if(saved){
+      try{
+        var parsed=JSON.parse(saved);
+        // 구버전(문자열 배열) 호환
+        TRACK_LIST=parsed.map(function(x){
+          return (typeof x==="string")?{no:x,alert:false}:x;
+        });
+      }catch(e){TRACK_LIST=[];}
+    }
   })();
   function saveTrack(){localStorage.setItem("trackList",JSON.stringify(TRACK_LIST));}
 
@@ -357,38 +391,68 @@
     var cards=document.getElementById("track-cards");
     if(TRACK_LIST.length===0){empty.style.display="block";cards.innerHTML="";return;}
     empty.style.display="none";
-    // 뒤 2자리로 매칭 인덱스 생성
     var map={};
     (list||[]).forEach(function(t){
-      map[t.trainNo]=t;          // 정확히
-      map[tail2(t.trainNo)]=t;   // 뒤 2자리
+      map[t.trainNo]=t;
+      map[tail2(t.trainNo)]=t;
     });
     var html="";
-    TRACK_LIST.forEach(function(no){
+    TRACK_LIST.forEach(function(item){
+      var no=item.no;
       var t=map[no]||map[tail2(no)];
       var found=!!t;
       var updn=found?(t.updnLine==="0"?"내선":"외선"):"";
       var term=found?(t.statnTnm||""):"";
       var cls="tcard"+(found?" found":" gone");
+      // 신도림까지 남은 역
+      var distLabel="";
+      if(found){
+        var p=loopPos(t.statnNm);
+        if(p>=0){var d=(SIDX-p+NLOOP)%NLOOP; distLabel=d===0?"신도림 도착":"신도림까지 "+d+"역";}
+      }
       html+='<div class="'+cls+'">';
       html+='<button class="tcard-del" data-no="'+no+'">×</button>';
       html+='<div class="tcard-no">'+no+'</div>';
       if(found){
-        html+='<div class="tcard-loc"><b>'+t.statnNm+'</b> <span class="tcard-stt">('+(STATUS[t.trainSttus]||"-")+')</span></div>';
+        html+='<div class="tcard-loc"><b>'+t.statnNm+'</b> <span class="badge s'+t.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[t.trainSttus]||"-")+'</span></div>';
+        if(distLabel)html+='<div class="tcard-dir">'+distLabel+'</div>';
         html+='<div class="tcard-dir">'+updn+(term?" · "+term+" 방면":"")+'</div>';
       }else{
-        html+='<div class="tcard-absent">현재 운행 목록에 없음<br>운행 전이거나 종착 후일 수 있습니다.</div>';
+        html+='<div class="tcard-absent">현재 운행 목록에 없음</div>';
       }
+      // 신도림 도착 알림 토글
+      html+='<label class="track-toggle"><span>전역 도착 알림</span><span class="tsw"><input type="checkbox" class="track-alert" data-no="'+no+'"'+(item.alert?" checked":"")+'><span class="tsw-slider"></span></span></label>';
       html+='</div>';
     });
     cards.innerHTML=html;
-    // 삭제 버튼 이벤트
+    // 삭제 버튼
     cards.querySelectorAll(".tcard-del").forEach(function(btn){
       btn.addEventListener("click",function(){
         var no=this.getAttribute("data-no");
-        TRACK_LIST=TRACK_LIST.filter(function(n){return n!==no;});
+        TRACK_LIST=TRACK_LIST.filter(function(it){return it.no!==no;});
         saveTrack();renderTrack(LATEST);
       });
+    });
+    // 알림 토글
+    cards.querySelectorAll(".track-alert").forEach(function(cb){
+      cb.addEventListener("change",function(){
+        var no=this.getAttribute("data-no");
+        TRACK_LIST.forEach(function(it){if(it.no===no)it.alert=cb.checked;});
+        saveTrack();
+      });
+    });
+    // 전역 도착 알림 체크 (내선=대림, 외선=문래)
+    TRACK_LIST.forEach(function(item){
+      if(!item.alert) return;
+      var t=map[item.no]||map[tail2(item.no)];
+      if(!t){return;}
+      var prevStation=(t.updnLine==="0")?"대림":"문래";  // 내선 전역=대림, 외선 전역=문래
+      if(t.statnNm.indexOf(prevStation)>=0 && !TRACK_FIRED[item.no]){
+        TRACK_FIRED[item.no]=true;
+        showAlarm(item.no, t);
+      }
+      // 전역을 벗어나면 다시 알림 가능하게 리셋
+      if(t.statnNm.indexOf(prevStation)<0){TRACK_FIRED[item.no]=false;}
     });
   }
 
@@ -396,8 +460,8 @@
   document.getElementById("track-add").addEventListener("click",function(){
     var val=document.getElementById("track-input").value.trim();
     if(!val){return;}
-    if(TRACK_LIST.indexOf(val)>=0){document.getElementById("track-input").value="";return;}
-    TRACK_LIST.push(val);saveTrack();
+    if(TRACK_LIST.some(function(it){return it.no===val;})){document.getElementById("track-input").value="";return;}
+    TRACK_LIST.push({no:val,alert:false});saveTrack();
     document.getElementById("track-input").value="";
     renderTrack(LATEST);
   });
