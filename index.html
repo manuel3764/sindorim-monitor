@@ -67,6 +67,29 @@
   .delay.late{color:var(--danger)} .delay.early{color:var(--success)} .delay.ontime{color:var(--muted)}
   .rt-delay{font-size:12px;font-weight:600;white-space:nowrap}
   .rt-delay.late{color:var(--danger)} .rt-delay.early{color:var(--success)} .rt-delay.ontime{color:var(--hint)}
+  /* 열차 상세 패널 */
+  .detail-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100}
+  .detail-overlay.show{display:block}
+  .detail-panel{display:none;position:fixed;top:0;right:0;height:100%;width:360px;max-width:88vw;
+    background:var(--surface);z-index:101;box-shadow:-4px 0 24px rgba(0,0,0,.3);
+    flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+  .detail-panel.show{display:flex;transform:translateX(0)}
+  .detail-head{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 18px;border-bottom:1px solid var(--line);font-size:16px;font-weight:600;flex-shrink:0}
+  .detail-head button{background:transparent;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px}
+  .detail-body{overflow-y:auto;padding:18px;flex:1}
+  .detail-field{margin-bottom:16px}
+  .detail-label{font-size:12px;color:var(--success);font-weight:600;margin-bottom:4px}
+  .detail-value{font-size:20px;font-weight:700}
+  .detail-value.big{font-size:34px;letter-spacing:1px}
+  .detail-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}
+  .detail-table th{background:var(--surface2);color:var(--muted);font-weight:600;
+    padding:8px 6px;text-align:center;border:1px solid var(--line)}
+  .detail-table td{padding:7px 6px;text-align:center;border:1px solid var(--line);color:var(--text)}
+  .detail-table td.stn{text-align:left;color:var(--muted)}
+  .detail-table tr.now td{background:#f5d000;color:#1a1a1a;font-weight:700}
+  body.light .detail-table tr.now td{background:#ffd93b;color:#1a1a1a}
+  .card,.train,.tcard{cursor:pointer}
   .wait{margin-top:12px;font-size:13px;color:var(--hint);line-height:1.5}
   .daerim-tag{margin-top:6px;font-size:13px;color:var(--danger)}
 
@@ -174,6 +197,16 @@
 </head>
 <body>
 <div class="wrap">
+
+  <!-- 열차 상세 패널 -->
+  <div class="detail-overlay" id="detail-overlay"></div>
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-head">
+      <span id="detail-title">열차 정보</span>
+      <button id="detail-close">✕</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
 
   <div class="alarm" id="alarm">
     <div>
@@ -302,30 +335,33 @@
   // ===== 전체 노선 시간표 기반 지연 계산 =====
   var FULL_SCHED=null;  // line2_sched.json 로드 결과
   fetch("line2_sched.json").then(function(r){return r.json();}).then(function(d){
-    FULL_SCHED=d;
+    FULL_SCHED=d; if(LATEST&&LATEST.length)renderBoth(LATEST,null);
   }).catch(function(){FULL_SCHED=null;});
+
+  function hm2min(hhmm){var p=String(hhmm).split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}
+  function curSchedBook(){return isHoliday(serviceDate())?(FULL_SCHED&&FULL_SCHED.SAT):(FULL_SCHED&&FULL_SCHED.DAY);}
+  // 시간표에서 열차 찾기 (뒤3자리)
+  function findSchedTrain(trainNo){
+    var book=curSchedBook(); if(!book) return null;
+    return book[String(trainNo).slice(-3)]||null;
+  }
 
   // 실시간 열차의 현재 위치 기준 지연(분) 계산. null이면 계산 불가
   function calcRealDelay(trainNo, statnNm){
-    if(!FULL_SCHED) return null;
-    var book=isHoliday(serviceDate())?FULL_SCHED.SAT:FULL_SCHED.DAY;
-    if(!book) return null;
-    var t3=String(trainNo).slice(-3);
-    var train=book[t3];
+    var train=findSchedTrain(trainNo);
     if(!train) return null;
-    // 현재 역의 정시(분) 찾기 (역명 부분일치 허용)
-    var stations=train.s, schedM=null;
-    if(stations[statnNm]!=null){schedM=stations[statnNm];}
+    var stations=train.st, schedStr=null;
+    if(stations[statnNm]!=null){schedStr=stations[statnNm];}
     else{
-      for(var k in stations){if(statnNm.indexOf(k)>=0||k.indexOf(statnNm)>=0){schedM=stations[k];break;}}
+      for(var k in stations){if(statnNm.indexOf(k)>=0||k.indexOf(statnNm)>=0){schedStr=stations[k];break;}}
     }
-    if(schedM==null) return null;
-    // 현재 시각(분, 운행일 기준 자정 넘김 처리)
+    if(schedStr==null) return null;
+    var schedM=hm2min(schedStr);
     var n=new Date();
     var nowM=n.getHours()*60+n.getMinutes();
-    if(n.getHours()<2) nowM+=1440;       // 새벽 운행은 +24h로 환산
-    if(schedM<300) schedM+=1440;          // 시간표도 새벽이면 +24h (예: 25:00=1500 그대로)
-    return nowM-schedM;  // 양수=지연, 음수=조기
+    if(n.getHours()<2) nowM+=1440;
+    if(schedM<300) schedM+=1440;
+    return nowM-schedM;
   }
 
   // ===== 본선 역 순서 (신도림 기준 정렬) =====
@@ -385,7 +421,7 @@
       var cls="card"+(daerim?" daerim":(found?" found":""));
       var stableBadge=isStable?' <span class="stable-badge">주박</span>':'';
       var ingoBadge=!isStable?' <span class="ingo-badge">입고</span>':'';
-      html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+stableBadge+ingoBadge+'</span><span class="sched">시간표 '+st+'</span></div>';
+      html+='<div class="'+cls+'" data-train="'+no+'"><div class="card-head"><span class="train-no">'+no+stableBadge+ingoBadge+'</span><span class="sched">시간표 '+st+'</span></div>';
       if(found){
         var dl=calcRealDelay(info.trainNo, info.statnNm),dt,dc;
         if(dl==null){dt="";dc="";}
@@ -433,7 +469,7 @@
       else if(delay<0) delayHtml=' <span class="rt-delay early">'+(-delay)+'분 빠름</span>';
       else delayHtml=' <span class="rt-delay ontime">정시</span>';
     }
-    var html='<div class="train'+(isSindorim?" sindorim-term":"")+'"><span class="no">'+tno+'</span>';
+    var html='<div class="train'+(isSindorim?" sindorim-term":"")+'" data-train="'+tno+'"><span class="no">'+tno+'</span>';
     html+='<span class="tloc">'+loc+delayHtml+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
     html+='<span class="badge s'+s+'">'+(STATUS[s]||"-")+'</span></div>';
     return html;
@@ -509,7 +545,7 @@
         var p=loopPos(t.statnNm);
         if(p>=0){var d=(SIDX-p+NLOOP)%NLOOP; distLabel=d===0?"신도림 도착":"신도림까지 "+d+"역";}
       }
-      html+='<div class="'+cls+'">';
+      html+='<div class="'+cls+'" data-train="'+no+'">';
       html+='<button class="tcard-del" data-no="'+no+'">×</button>';
       html+='<div class="tcard-no">'+no+'</div>';
       if(found){
@@ -576,6 +612,63 @@
   });
   document.getElementById("track-input").addEventListener("keydown",function(e){
     if(e.key==="Enter") document.getElementById("track-add").click();
+  });
+
+  // ===== 열차 상세 패널 =====
+  function openDetail(trainNo){
+    var t3=String(trainNo).slice(-3);
+    var train=findSchedTrain(trainNo);
+    // 실시간 현재 위치 찾기
+    var live=null;
+    LATEST.forEach(function(x){if(String(x.trainNo).slice(-3)===t3)live=x;});
+    var weekend=isHoliday(serviceDate());
+
+    var body="";
+    body+='<div class="detail-field"><div class="detail-label">열차번호</div><div class="detail-value big">'+esc(trainNo)+'</div></div>';
+    body+='<div class="detail-field"><div class="detail-label">운행노선</div><div class="detail-value">02호선</div></div>';
+    if(train){
+      body+='<div class="detail-field"><div class="detail-label">출발역</div><div class="detail-value">'+esc(train.start)+'</div></div>';
+      body+='<div class="detail-field"><div class="detail-label">도착역</div><div class="detail-value">'+esc(train.end)+'</div></div>';
+      // 현재 위치/지연
+      if(live){
+        var dl=calcRealDelay(trainNo, live.statnNm);
+        var dtxt=dl==null?"":(dl>0?" (+"+dl+"분 지연)":(dl<0?" ("+(-dl)+"분 빠름)":" (정시)"));
+        body+='<div class="detail-field"><div class="detail-label">현재 위치</div><div class="detail-value" style="font-size:18px">'+esc(live.statnNm)+' '+(STATUS[live.trainSttus]||"")+esc(dtxt)+'</div></div>';
+      }
+      // 역별 통과 시간표
+      body+='<div class="detail-field"><div class="detail-label">역별 통과 시간표 ('+(weekend?"토·일·공휴일":"평일")+')</div>';
+      body+='<table class="detail-table"><thead><tr><th>역명</th><th>통과시간</th></tr></thead><tbody>';
+      var keys=Object.keys(train.st), liveStn=live?live.statnNm:null;
+      keys.forEach(function(stn,i){
+        var tm=train.st[stn];
+        var nowCls=(liveStn&&(stn===liveStn||liveStn.indexOf(stn)>=0||stn.indexOf(liveStn)>=0))?" class=\"now\"":"";
+        body+='<tr'+nowCls+'><td class="stn">'+esc(stn)+'</td><td>'+esc(tm)+'</td></tr>';
+      });
+      body+='</tbody></table></div>';
+    } else {
+      body+='<div class="detail-field" style="color:var(--hint);font-size:14px;margin-top:10px">이 열차는 시간표 정보가 없습니다.<br>(임시열차 또는 지선 열차일 수 있습니다)</div>';
+      if(live){
+        body+='<div class="detail-field"><div class="detail-label">현재 위치</div><div class="detail-value" style="font-size:18px">'+esc(live.statnNm)+' '+(STATUS[live.trainSttus]||"")+'</div></div>';
+      }
+    }
+    document.getElementById("detail-title").textContent=trainNo+" 열차 정보";
+    document.getElementById("detail-body").innerHTML=body;
+    document.getElementById("detail-overlay").classList.add("show");
+    document.getElementById("detail-panel").classList.add("show");
+  }
+  function closeDetail(){
+    document.getElementById("detail-overlay").classList.remove("show");
+    document.getElementById("detail-panel").classList.remove("show");
+  }
+  document.getElementById("detail-close").addEventListener("click",closeDetail);
+  document.getElementById("detail-overlay").addEventListener("click",closeDetail);
+
+  // 카드 클릭 → 상세 (이벤트 위임). data-train 속성 사용
+  document.addEventListener("click",function(e){
+    var el=e.target.closest("[data-train]");
+    if(!el) return;
+    if(e.target.closest(".tcard-del")||e.target.closest(".track-toggle")) return; // 삭제/토글은 제외
+    openDetail(el.getAttribute("data-train"));
   });
 
   // ===== 탭 전환 =====
