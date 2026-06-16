@@ -351,6 +351,9 @@
   // 열차번호 뒤 2자리 매칭 (시간표 번호와 실시간 번호 앞자리가 다를 수 있음)
   // 예: 시간표 2290 ↔ 실시간 4290 → 뒤 2자리 "90" 일치
   function tail2(no){return String(no).slice(-3);}
+  // HTML 특수문자 무력화 (XSS 방지)
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
   function matchSched(trainNo, sched){
     // 정확히 일치하면 그게 우선
     if(sched[trainNo]) return trainNo;
@@ -392,7 +395,7 @@
         // 신도림역까지 남은 역 수 계산 (내선 기준)
         var curPos=loopPos(info.statnNm);
         var distToSindorim=curPos>=0?(SIDX-curPos+NLOOP)%NLOOP:null;
-        html+='<div class="loc"><b>'+info.statnNm+'</b> <span class="badge s'+info.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[info.trainSttus]||"-")+'</span></div>';
+        html+='<div class="loc"><b>'+esc(info.statnNm)+'</b> <span class="badge s'+info.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[info.trainSttus]||"-")+'</span></div>';
         if(distToSindorim!==null&&distToSindorim>0){
           html+='<div style="font-size:12px;color:var(--muted);margin-top:4px">신도림역까지 '+distToSindorim+'역</div>';
         } else if(distToSindorim===0){
@@ -418,10 +421,10 @@
 
   // ===== 렌더: 전체 현황 =====
   function trainRow(t,dist){
-    var s=t.trainSttus||"",loc=t.statnNm||"",term=t.statnTnm||"";
+    var s=t.trainSttus||"",loc=esc(t.statnNm||""),term=esc(t.statnTnm||""),tno=esc(t.trainNo);
     var dl="";
     if(typeof dist==="number"&&dist<999){dl=dist===0?"신도림":"신도림까지 "+dist+"역";}
-    var isSindorim=term.indexOf("신도림")>=0;
+    var isSindorim=(t.statnTnm||"").indexOf("신도림")>=0;
     // 실시간 지연 계산
     var delay=calcRealDelay(t.trainNo, t.statnNm);
     var delayHtml="";
@@ -430,7 +433,7 @@
       else if(delay<0) delayHtml=' <span class="rt-delay early">'+(-delay)+'분 빠름</span>';
       else delayHtml=' <span class="rt-delay ontime">정시</span>';
     }
-    var html='<div class="train'+(isSindorim?" sindorim-term":"")+'"><span class="no">'+t.trainNo+'</span>';
+    var html='<div class="train'+(isSindorim?" sindorim-term":"")+'"><span class="no">'+tno+'</span>';
     html+='<span class="tloc">'+loc+delayHtml+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
     html+='<span class="badge s'+s+'">'+(STATUS[s]||"-")+'</span></div>';
     return html;
@@ -494,11 +497,11 @@
     });
     var html="";
     TRACK_LIST.forEach(function(item){
-      var no=item.no;
-      var t=map[no]||map[tail2(no)];
+      var no=esc(item.no);
+      var t=map[item.no]||map[tail2(item.no)];
       var found=!!t;
       var updn=found?(t.updnLine==="0"?"내선":"외선"):"";
-      var term=found?(t.statnTnm||""):"";
+      var term=found?esc(t.statnTnm||""):"";
       var cls="tcard"+(found?" found":" gone");
       // 신도림까지 남은 역
       var distLabel="";
@@ -510,7 +513,7 @@
       html+='<button class="tcard-del" data-no="'+no+'">×</button>';
       html+='<div class="tcard-no">'+no+'</div>';
       if(found){
-        html+='<div class="tcard-loc"><b>'+t.statnNm+'</b> <span class="badge s'+t.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[t.trainSttus]||"-")+'</span></div>';
+        html+='<div class="tcard-loc"><b>'+esc(t.statnNm)+'</b> <span class="badge s'+t.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[t.trainSttus]||"-")+'</span></div>';
         // 지연 표시
         var tdelay=calcRealDelay(t.trainNo, t.statnNm);
         if(tdelay!=null){
@@ -564,7 +567,8 @@
   // 추가 버튼
   document.getElementById("track-add").addEventListener("click",function(){
     var val=document.getElementById("track-input").value.trim();
-    if(!val){return;}
+    val=val.replace(/[^0-9]/g,"");  // 숫자만 허용
+    if(!val){document.getElementById("track-input").value="";return;}
     if(TRACK_LIST.some(function(it){return it.no===val;})){document.getElementById("track-input").value="";return;}
     TRACK_LIST.push({no:val,alert:false});saveTrack();
     document.getElementById("track-input").value="";
