@@ -511,6 +511,15 @@
       html+='<div class="tcard-no">'+no+'</div>';
       if(found){
         html+='<div class="tcard-loc"><b>'+t.statnNm+'</b> <span class="badge s'+t.trainSttus+'" style="font-size:11px;margin-left:6px">'+(STATUS[t.trainSttus]||"-")+'</span></div>';
+        // 지연 표시
+        var tdelay=calcRealDelay(t.trainNo, t.statnNm);
+        if(tdelay!=null){
+          var tdt,tdc;
+          if(tdelay>0){tdt="+"+tdelay+"분 지연";tdc="late";}
+          else if(tdelay<0){tdt=(-tdelay)+"분 빠름";tdc="early";}
+          else{tdt="정시";tdc="ontime";}
+          html+='<div class="tcard-dir"><span class="rt-delay '+tdc+'">'+tdt+'</span></div>';
+        }
         if(distLabel)html+='<div class="tcard-dir">'+distLabel+'</div>';
         html+='<div class="tcard-dir">'+updn+(term?" · "+term+" 방면":"")+'</div>';
       }else{
