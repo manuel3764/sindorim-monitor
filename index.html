@@ -132,6 +132,19 @@
   .sched-row.alimi{background:rgba(59,191,122,.08);border-left:3px solid var(--success)}
   .sched-no{font-size:22px;font-weight:700;color:var(--text);white-space:nowrap}
   .sched-time{font-size:22px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  @media(max-width:600px){
+    body{padding:14px}
+    .sched-cols{gap:8px}
+    .sched-row{padding:10px 10px;gap:4px}
+    .sched-no{font-size:17px}
+    .sched-time{font-size:16px}
+    .stable-badge,.ingo-badge{font-size:10px;padding:1px 5px;margin-left:4px}
+  }
+  @media(max-width:380px){
+    .sched-no{font-size:15px}
+    .sched-time{font-size:14px}
+    .stable-badge,.ingo-badge{display:none}
+  }
   .track-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
   .tcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;position:relative}
   .tcard.found{border-color:var(--info)}
@@ -174,9 +187,9 @@
 
   <div class="tabs">
     <button class="tab active" id="tab-alimi">입고 알리미</button>
-    <button class="tab" id="tab-sched">입고 시간표</button>
     <button class="tab" id="tab-all">전체 운행 현황</button>
     <button class="tab" id="tab-track">열차 추적</button>
+    <button class="tab" id="tab-sched">입고 시간표</button>
   </div>
 
   <div class="statusbar">
@@ -253,7 +266,7 @@
   var SCHED_WEEKDAY={"2446":"21:22","2516":"25:00"};
   var SCHED_WEEKEND={"2376":"21:01","2388":"21:36","2398":"22:04","2408":"22:35","2412":"22:48","2418":"23:09","2424":"23:30","2428":"23:44","2432":"24:00"};
   // 주박열차 (차량기지에 밤새 머무는 열차)
-  var STABLE_TRAINS={"2516":1,"2432":1};
+  var STABLE_TRAINS={"2516":1,"2432":1,"2523":1,"2423":1};
   var STATUS={"0":"진입","1":"도착","2":"출발","3":"접근"};
   var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0;
   var LATEST=[]; // 최근 응답 (탭 전환 시 즉시 재렌더용)
@@ -549,7 +562,7 @@
   var ALIMI_TRAINS={"2446":1,"2516":1,"2376":1,"2388":1,"2398":1,"2408":1,"2412":1,"2418":1,"2424":1,"2428":1,"2432":1};
 
   function schedRow(no, time){
-    var isStable=(no==="2516"||no==="2432");
+    var isStable=(no==="2516"||no==="2432"||no==="2523"||no==="2423");
     var isAlimi=!!ALIMI_TRAINS[no];
     var rowCls="sched-row"+(isStable?" stable":(isAlimi?" alimi":""));
     return '<div class="'+rowCls+'">'
