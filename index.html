@@ -65,6 +65,8 @@
   .stt{font-size:13px;color:var(--muted)}
   .delay{margin-top:6px;font-size:13px}
   .delay.late{color:var(--danger)} .delay.early{color:var(--success)} .delay.ontime{color:var(--muted)}
+  .rt-delay{font-size:12px;font-weight:600;white-space:nowrap}
+  .rt-delay.late{color:var(--danger)} .rt-delay.early{color:var(--success)} .rt-delay.ontime{color:var(--hint)}
   .wait{margin-top:12px;font-size:13px;color:var(--hint);line-height:1.5}
   .daerim-tag{margin-top:6px;font-size:13px;color:var(--danger)}
 
@@ -297,6 +299,35 @@
     var n=new Date();return n.getHours()*60+n.getMinutes()-s;
   }
 
+  // ===== 전체 노선 시간표 기반 지연 계산 =====
+  var FULL_SCHED=null;  // line2_sched.json 로드 결과
+  fetch("line2_sched.json").then(function(r){return r.json();}).then(function(d){
+    FULL_SCHED=d;
+  }).catch(function(){FULL_SCHED=null;});
+
+  // 실시간 열차의 현재 위치 기준 지연(분) 계산. null이면 계산 불가
+  function calcRealDelay(trainNo, statnNm){
+    if(!FULL_SCHED) return null;
+    var book=isHoliday(serviceDate())?FULL_SCHED.SAT:FULL_SCHED.DAY;
+    if(!book) return null;
+    var t3=String(trainNo).slice(-3);
+    var train=book[t3];
+    if(!train) return null;
+    // 현재 역의 정시(분) 찾기 (역명 부분일치 허용)
+    var stations=train.s, schedM=null;
+    if(stations[statnNm]!=null){schedM=stations[statnNm];}
+    else{
+      for(var k in stations){if(statnNm.indexOf(k)>=0||k.indexOf(statnNm)>=0){schedM=stations[k];break;}}
+    }
+    if(schedM==null) return null;
+    // 현재 시각(분, 운행일 기준 자정 넘김 처리)
+    var n=new Date();
+    var nowM=n.getHours()*60+n.getMinutes();
+    if(n.getHours()<2) nowM+=1440;       // 새벽 운행은 +24h로 환산
+    if(schedM<300) schedM+=1440;          // 시간표도 새벽이면 +24h (예: 25:00=1500 그대로)
+    return nowM-schedM;  // 양수=지연, 음수=조기
+  }
+
   // ===== 본선 역 순서 (신도림 기준 정렬) =====
   var LOOP=["시청","을지로입구","을지로3가","을지로4가","동대문역사문화공원","신당","상왕십리","왕십리","한양대","뚝섬","성수","건대입구","구의","강변","잠실나루","잠실","신천","종합운동장","삼성","선릉","역삼","강남","교대","서초","방배","사당","낙성대","서울대입구","봉천","신림","신대방","구로디지털단지","대림","신도림","문래","영등포구청","당산","합정","홍대입구","신촌","이대","아현","충정로"];
   var NLOOP=LOOP.length, SIDX=LOOP.indexOf("신도림");
@@ -353,8 +384,11 @@
       var ingoBadge=!isStable?' <span class="ingo-badge">입고</span>':'';
       html+='<div class="'+cls+'"><div class="card-head"><span class="train-no">'+no+stableBadge+ingoBadge+'</span><span class="sched">시간표 '+st+'</span></div>';
       if(found){
-        var dl=delayMin(st),dt,dc;
-        if(dl>0){dt="+"+dl+"분 지연";dc="late";}else{dt="";dc="";}
+        var dl=calcRealDelay(info.trainNo, info.statnNm),dt,dc;
+        if(dl==null){dt="";dc="";}
+        else if(dl>0){dt="+"+dl+"분 지연";dc="late";}
+        else if(dl<0){dt=(-dl)+"분 빠름";dc="early";}
+        else{dt="정시";dc="ontime";}
         // 신도림역까지 남은 역 수 계산 (내선 기준)
         var curPos=loopPos(info.statnNm);
         var distToSindorim=curPos>=0?(SIDX-curPos+NLOOP)%NLOOP:null;
@@ -388,8 +422,16 @@
     var dl="";
     if(typeof dist==="number"&&dist<999){dl=dist===0?"신도림":"신도림까지 "+dist+"역";}
     var isSindorim=term.indexOf("신도림")>=0;
+    // 실시간 지연 계산
+    var delay=calcRealDelay(t.trainNo, t.statnNm);
+    var delayHtml="";
+    if(delay!=null){
+      if(delay>0) delayHtml=' <span class="rt-delay late">+'+delay+'분</span>';
+      else if(delay<0) delayHtml=' <span class="rt-delay early">'+(-delay)+'분 빠름</span>';
+      else delayHtml=' <span class="rt-delay ontime">정시</span>';
+    }
     var html='<div class="train'+(isSindorim?" sindorim-term":"")+'"><span class="no">'+t.trainNo+'</span>';
-    html+='<span class="tloc">'+loc+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
+    html+='<span class="tloc">'+loc+delayHtml+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
     html+='<span class="badge s'+s+'">'+(STATUS[s]||"-")+'</span></div>';
     return html;
   }
