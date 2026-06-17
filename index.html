@@ -90,6 +90,33 @@
   .detail-table tr.now td{background:#f5d000;color:#1a1a1a;font-weight:700}
   body.light .detail-table tr.now td{background:#ffd93b;color:#1a1a1a}
   .card,.train,.tcard,.sched-row{cursor:pointer}
+  /* 전체 시간표 */
+  .full-controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .full-controls select,.full-controls input{background:var(--surface);border:1px solid var(--line);
+    color:var(--text);font-size:15px;padding:9px 12px;border-radius:8px;outline:none}
+  .full-controls select:focus,.full-controls input:focus{border-color:var(--info)}
+  .full-controls button{background:var(--info);border:none;color:#fff;font-size:14px;
+    font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer}
+  .full-row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:8px;
+    margin-bottom:5px;background:var(--surface);cursor:pointer}
+  .full-row:hover{background:var(--surface2)}
+  .full-row .ft-time{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;min-width:60px}
+  .full-row .ft-no{font-size:15px;font-weight:600;color:var(--info);min-width:50px}
+  .full-row .ft-dir{font-size:12px;padding:2px 8px;border-radius:6px;font-weight:600}
+  .full-row .ft-dir.IN{background:rgba(59,191,122,.15);color:var(--inner)}
+  .full-row .ft-dir.OUT{background:rgba(224,169,59,.15);color:var(--outer)}
+  .full-row .ft-end{font-size:13px;color:var(--muted);margin-left:auto}
+  .full-empty{font-size:14px;color:var(--hint);padding:20px 0}
+  .full-count{font-size:13px;color:var(--muted);margin-bottom:10px}
+  .full-group{margin-bottom:8px}
+  .full-group-head{display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;
+    cursor:pointer;font-size:16px;font-weight:700;user-select:none}
+  .full-group-head:hover{border-color:var(--info)}
+  .fg-count{font-size:13px;font-weight:500;color:var(--muted)}
+  .fg-arrow{display:inline-block;transition:transform .2s ease;margin-left:4px}
+  .full-group-head.open .fg-arrow{transform:rotate(180deg)}
+  .full-group-body{padding:8px 0 4px}
   .wait{margin-top:12px;font-size:13px;color:var(--hint);line-height:1.5}
   .daerim-tag{margin-top:6px;font-size:13px;color:var(--danger)}
 
@@ -225,6 +252,7 @@
     <button class="tab" id="tab-all">전체 운행 현황</button>
     <button class="tab" id="tab-track">열차 추적</button>
     <button class="tab" id="tab-sched">입고 시간표</button>
+    <button class="tab" id="tab-full">전체 시간표</button>
   </div>
 
   <div class="statusbar">
@@ -287,6 +315,34 @@
         <div><div class="sched-col-head">내선 입고 (13)</div><div id="se-inner-in"></div></div>
         <div><div class="sched-col-head">외선 입고 (12)</div><div id="se-outer-in"></div></div>
       </div>
+    </div>
+  </div>
+
+  <!-- 페이지 5: 전체 시간표 -->
+  <div class="page" id="page-full">
+    <div class="sched-daytabs">
+      <button class="sched-daytab active" id="ftab-station">역 기준</button>
+      <button class="sched-daytab" id="ftab-train">열차 기준</button>
+    </div>
+    <!-- 역 기준 -->
+    <div id="full-station">
+      <div class="full-controls">
+        <select id="full-station-select"></select>
+        <select id="full-dir-select">
+          <option value="all">전체 방향</option>
+          <option value="IN">내선</option>
+          <option value="OUT">외선</option>
+        </select>
+      </div>
+      <div id="full-station-result"></div>
+    </div>
+    <!-- 열차 기준 -->
+    <div id="full-train" style="display:none">
+      <div class="full-controls">
+        <input id="full-train-input" type="text" inputmode="numeric" maxlength="4" placeholder="열차번호 (예: 2446)">
+        <button id="full-train-btn">검색</button>
+      </div>
+      <div id="full-train-result"></div>
     </div>
   </div>
 
@@ -673,7 +729,7 @@
 
   // ===== 탭 전환 =====
   function switchTab(which){
-    ["alimi","sched","all","track"].forEach(function(w){
+    ["alimi","sched","all","track","full"].forEach(function(w){
       document.getElementById("tab-"+w).classList.toggle("active",which===w);
       document.getElementById("page-"+w).classList.toggle("active",which===w);
     });
@@ -681,6 +737,7 @@
   document.getElementById("tab-alimi").addEventListener("click",function(){switchTab("alimi");});
   document.getElementById("tab-all").addEventListener("click",function(){switchTab("all");});
   document.getElementById("tab-track").addEventListener("click",function(){switchTab("track");});
+  document.getElementById("tab-full").addEventListener("click",function(){switchTab("full");initFullSched();});
 
   // ===== 입출고 시간표 데이터 =====
   var TIMETABLE={
@@ -734,6 +791,107 @@
     renderSchedList("se-outer-in",e.outer.in);
   }
   renderSched();
+
+  // ===== 전체 시간표 (역 기준 / 열차 기준) =====
+  var FULL_INIT=false;
+  function initFullSched(){
+    if(FULL_INIT) return;
+    if(!FULL_SCHED){ // 시간표 아직 로딩 안됨 - 잠시후 재시도
+      document.getElementById("full-station-result").innerHTML='<div class="full-empty">시간표 불러오는 중…</div>';
+      setTimeout(function(){if(FULL_SCHED)initFullSched();},500);
+      return;
+    }
+    FULL_INIT=true;
+    // 역 목록 채우기 (LOOP 순서 사용)
+    var sel=document.getElementById("full-station-select");
+    sel.innerHTML=LOOP.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join("");
+    sel.value="신도림";
+    sel.addEventListener("change",renderFullStation);
+    document.getElementById("full-dir-select").addEventListener("change",renderFullStation);
+    document.getElementById("ftab-station").addEventListener("click",function(){
+      this.classList.add("active");document.getElementById("ftab-train").classList.remove("active");
+      document.getElementById("full-station").style.display="";
+      document.getElementById("full-train").style.display="none";
+    });
+    document.getElementById("ftab-train").addEventListener("click",function(){
+      this.classList.add("active");document.getElementById("ftab-station").classList.remove("active");
+      document.getElementById("full-station").style.display="none";
+      document.getElementById("full-train").style.display="";
+    });
+    document.getElementById("full-train-btn").addEventListener("click",renderFullTrain);
+    document.getElementById("full-train-input").addEventListener("keydown",function(e){
+      if(e.key==="Enter")renderFullTrain();
+    });
+    renderFullStation();
+  }
+
+  function renderFullStation(){
+    var book=isHoliday(serviceDate())?FULL_SCHED.SAT:FULL_SCHED.DAY;
+    var stn=document.getElementById("full-station-select").value;
+    var dir=document.getElementById("full-dir-select").value;
+    var rows=[];
+    for(var no in book){
+      var info=book[no];
+      if(info.st[stn]!=null){
+        if(dir!=="all"&&info.d!==dir) continue;
+        rows.push({time:info.st[stn], no:no, dir:info.d, end:info.end});
+      }
+    }
+    rows.sort(function(a,b){return hm2min(a.time)-hm2min(b.time);});
+    var box=document.getElementById("full-station-result");
+    if(rows.length===0){box.innerHTML='<div class="full-empty">해당 조건의 열차가 없습니다.</div>';return;}
+    // 시간대(시)별 그룹화
+    var groups={};
+    rows.forEach(function(r){
+      var h=parseInt(r.time.split(":")[0],10);
+      if(!groups[h])groups[h]=[];
+      groups[h].push(r);
+    });
+    var hours=Object.keys(groups).map(Number).sort(function(a,b){return a-b;});
+    // 현재 시각의 시간대 (운행일 기준)
+    var nowH=new Date().getHours();
+    if(nowH<2)nowH+=24;
+    var html='<div class="full-count">'+stn+'역 · '+(isHoliday(serviceDate())?"토·일·공휴일":"평일")+' · 총 '+rows.length+'대</div>';
+    hours.forEach(function(h){
+      var label=(h>=24?(h-24):h);
+      var open=(h===nowH);  // 현재 시간대만 기본 펼침
+      html+='<div class="full-group">';
+      html+='<div class="full-group-head'+(open?" open":"")+'" data-hour="'+h+'"><span>'+label+'시</span><span class="fg-count">'+groups[h].length+'대 <span class="fg-arrow">▾</span></span></div>';
+      html+='<div class="full-group-body"'+(open?'':' style="display:none"')+'>';
+      html+=groups[h].map(function(r){
+        return '<div class="full-row" data-train="2'+r.no+'"><span class="ft-time">'+esc(r.time)+'</span>'
+          +'<span class="ft-dir '+r.dir+'">'+(r.dir==="IN"?"내선":"외선")+'</span>'
+          +'<span class="ft-no">2'+r.no+'</span>'
+          +'<span class="ft-end">'+esc(r.end)+' 방면</span></div>';
+      }).join("");
+      html+='</div></div>';
+    });
+    box.innerHTML=html;
+    // 그룹 헤더 클릭 → 토글
+    box.querySelectorAll(".full-group-head").forEach(function(head){
+      head.addEventListener("click",function(){
+        var body=this.nextElementSibling;
+        var isOpen=body.style.display!=="none";
+        body.style.display=isOpen?"none":"";
+        this.classList.toggle("open",!isOpen);
+      });
+    });
+  }
+
+  function renderFullTrain(){
+    var val=document.getElementById("full-train-input").value.trim().replace(/[^0-9]/g,"");
+    var box=document.getElementById("full-train-result");
+    if(!val){box.innerHTML='<div class="full-empty">열차번호를 입력하세요.</div>';return;}
+    var train=findSchedTrain(val);
+    if(!train){box.innerHTML='<div class="full-empty">'+esc(val)+' 열차의 시간표를 찾을 수 없습니다.<br>(임시열차이거나 지선 열차일 수 있습니다)</div>';return;}
+    var html='<div class="full-count">'+esc(val)+' · '+esc(train.start)+'→'+esc(train.end)+' · '+(isHoliday(serviceDate())?"토·일·공휴일":"평일")+'</div>';
+    html+='<table class="detail-table"><thead><tr><th>역명</th><th>통과시간</th></tr></thead><tbody>';
+    for(var stn in train.st){
+      html+='<tr><td class="stn">'+esc(stn)+'</td><td>'+esc(train.st[stn])+'</td></tr>';
+    }
+    html+='</tbody></table>';
+    box.innerHTML=html;
+  }
 
   // 시간표 평일/주말 탭
   // 시간표 탭 진입 시 오늘 요일에 맞게 자동 전환
