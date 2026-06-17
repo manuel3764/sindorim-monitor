@@ -105,6 +105,7 @@
   .full-row .ft-dir{font-size:12px;padding:2px 8px;border-radius:6px;font-weight:600}
   .full-row .ft-dir.IN{background:rgba(59,191,122,.15);color:var(--inner)}
   .full-row .ft-dir.OUT{background:rgba(224,169,59,.15);color:var(--outer)}
+  .full-row .ft-dir.BRANCH{background:rgba(155,127,224,.15);color:var(--branch)}
   .full-row .ft-end{font-size:13px;color:var(--muted);margin-left:auto}
   .full-empty{font-size:14px;color:var(--hint);padding:20px 0}
   .full-count{font-size:13px;color:var(--muted);margin-bottom:10px}
@@ -396,10 +397,15 @@
 
   function hm2min(hhmm){var p=String(hhmm).split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}
   function curSchedBook(){return isHoliday(serviceDate())?(FULL_SCHED&&FULL_SCHED.SAT):(FULL_SCHED&&FULL_SCHED.DAY);}
-  // 시간표에서 열차 찾기 (뒤3자리)
+  // 시간표에서 열차 찾기 (본선=뒤3자리, 지선=F+전체번호)
   function findSchedTrain(trainNo){
     var book=curSchedBook(); if(!book) return null;
-    return book[String(trainNo).slice(-3)]||null;
+    var no=String(trainNo);
+    // 본선 매칭 (뒤3자리)
+    if(book[no.slice(-3)]) return book[no.slice(-3)];
+    // 지선 매칭 (F+전체번호)
+    if(book["F"+no]) return book["F"+no];
+    return null;
   }
 
   // 실시간 열차의 현재 위치 기준 지연(분) 계산. null이면 계산 불가
@@ -806,7 +812,7 @@
     var sel=document.getElementById("full-station-select");
     sel.innerHTML=LOOP.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join("");
     sel.value="신도림";
-    sel.addEventListener("change",renderFullStation);
+    sel.addEventListener("change",function(){updateDirOptions();renderFullStation();});
     document.getElementById("full-dir-select").addEventListener("change",renderFullStation);
     document.getElementById("ftab-station").addEventListener("click",function(){
       this.classList.add("active");document.getElementById("ftab-train").classList.remove("active");
@@ -822,7 +828,26 @@
     document.getElementById("full-train-input").addEventListener("keydown",function(e){
       if(e.key==="Enter")renderFullTrain();
     });
+    updateDirOptions();
     renderFullStation();
+  }
+
+  // 선택한 역에 지선이 있으면 방향 옵션에 '지선' 추가
+  function updateDirOptions(){
+    var book=isHoliday(serviceDate())?FULL_SCHED.SAT:FULL_SCHED.DAY;
+    var stn=document.getElementById("full-station-select").value;
+    var hasBranch=false;
+    for(var k in book){
+      if(k.charAt(0)==="F"&&book[k].st[stn]!=null){hasBranch=true;break;}
+    }
+    var dirSel=document.getElementById("full-dir-select");
+    var cur=dirSel.value;
+    var opts='<option value="all">전체 방향</option><option value="IN">내선</option><option value="OUT">외선</option>';
+    if(hasBranch)opts+='<option value="BRANCH">지선</option>';
+    dirSel.innerHTML=opts;
+    // 이전 선택 유지 (지선 없는 역으로 가면 전체로)
+    if(cur==="BRANCH"&&!hasBranch)cur="all";
+    dirSel.value=cur;
   }
 
   function renderFullStation(){
@@ -830,11 +855,15 @@
     var stn=document.getElementById("full-station-select").value;
     var dir=document.getElementById("full-dir-select").value;
     var rows=[];
-    for(var no in book){
-      var info=book[no];
+    for(var key in book){
+      var info=book[key];
       if(info.st[stn]!=null){
-        if(dir!=="all"&&info.d!==dir) continue;
-        rows.push({time:info.st[stn], no:no, dir:info.d, end:info.end});
+        var isBranch=key.charAt(0)==="F";
+        // 방향 필터: BRANCH는 지선만, IN/OUT은 해당 본선 방향만
+        if(dir==="BRANCH"){ if(!isBranch) continue; }
+        else if(dir!=="all"){ if(isBranch||info.d!==dir) continue; }
+        var fullNo=isBranch?key.slice(1):("2"+key);
+        rows.push({time:info.st[stn], no:fullNo, dir:info.d, end:info.end, branch:isBranch});
       }
     }
     rows.sort(function(a,b){return hm2min(a.time)-hm2min(b.time);});
@@ -848,26 +877,26 @@
       groups[h].push(r);
     });
     var hours=Object.keys(groups).map(Number).sort(function(a,b){return a-b;});
-    // 현재 시각의 시간대 (운행일 기준)
     var nowH=new Date().getHours();
     if(nowH<2)nowH+=24;
     var html='<div class="full-count">'+stn+'역 · '+(isHoliday(serviceDate())?"토·일·공휴일":"평일")+' · 총 '+rows.length+'대</div>';
     hours.forEach(function(h){
       var label=(h>=24?(h-24):h);
-      var open=(h===nowH);  // 현재 시간대만 기본 펼침
+      var open=(h===nowH);
       html+='<div class="full-group">';
       html+='<div class="full-group-head'+(open?" open":"")+'" data-hour="'+h+'"><span>'+label+'시</span><span class="fg-count">'+groups[h].length+'대 <span class="fg-arrow">▾</span></span></div>';
       html+='<div class="full-group-body"'+(open?'':' style="display:none"')+'>';
       html+=groups[h].map(function(r){
-        return '<div class="full-row" data-train="2'+r.no+'"><span class="ft-time">'+esc(r.time)+'</span>'
-          +'<span class="ft-dir '+r.dir+'">'+(r.dir==="IN"?"내선":"외선")+'</span>'
-          +'<span class="ft-no">2'+r.no+'</span>'
+        var dirLabel=r.branch?"지선":(r.dir==="IN"?"내선":"외선");
+        var dirCls=r.branch?"BRANCH":r.dir;
+        return '<div class="full-row" data-train="'+esc(r.no)+'"><span class="ft-time">'+esc(r.time)+'</span>'
+          +'<span class="ft-dir '+dirCls+'">'+dirLabel+'</span>'
+          +'<span class="ft-no">'+esc(r.no)+'</span>'
           +'<span class="ft-end">'+esc(r.end)+' 방면</span></div>';
       }).join("");
       html+='</div></div>';
     });
     box.innerHTML=html;
-    // 그룹 헤더 클릭 → 토글
     box.querySelectorAll(".full-group-head").forEach(function(head){
       head.addEventListener("click",function(){
         var body=this.nextElementSibling;
