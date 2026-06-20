@@ -182,10 +182,11 @@
   .sched-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .sched-col-head{font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--line)}
   .sched-row{display:flex;justify-content:space-between;align-items:center;
-    padding:13px 16px;border-radius:10px;margin-bottom:6px;background:var(--surface);gap:8px}
+    padding:13px 16px;border-radius:10px;margin-bottom:6px;background:var(--surface);
+    border:1px solid var(--line);gap:8px}
   .sched-row:hover{background:var(--surface2)}
-  .sched-row.stable{background:rgba(155,127,224,.1);border-left:3px solid #9b7fe0}
-  .sched-row.alimi{background:rgba(59,191,122,.08);border-left:3px solid var(--success)}
+  .sched-row.stable{border-color:#9b7fe0;background:rgba(155,127,224,.1)}
+  .sched-row.alimi{border-color:var(--success);background:rgba(59,191,122,.1)}
   .sched-no{font-size:22px;font-weight:700;color:var(--text);white-space:nowrap}
   .sched-time{font-size:22px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
   @media(max-width:600px){
@@ -358,6 +359,21 @@
   //    예: https://sindorim-train.본인계정.workers.dev
   var WORKER_URL="https://sindorim-train.kimkim3764.workers.dev";
 
+  // ============================================================
+  // 📌 입고열차 추가/수정/삭제하려면 아래 3곳을 고치세요
+  // ------------------------------------------------------------
+  //  형식: "열차번호":"시각"  (시각은 24시 이후는 25:00처럼 표기)
+  //  쉼표(,)와 따옴표("")를 정확히 지켜야 앱이 정상 작동합니다.
+  //
+  //  1) SCHED_WEEKDAY  : 평일 입고열차  (번호:시각)
+  //  2) SCHED_WEEKEND  : 토·일·공휴일 입고열차  (번호:시각)
+  //  3) STABLE_TRAINS  : 그 열차가 '주박'이면 "번호":1 추가 (보라 배지)
+  //  4) ALIMI_TRAINS   : 입고 시간표 탭에서 강조하려면 "번호":1 추가
+  //                      (아래쪽 ALIMI_TRAINS 변수에 있음)
+  //  예) 평일에 2450 열차가 21:40 입고로 추가되면:
+  //      SCHED_WEEKDAY 에  "2450":"21:40"  추가
+  //      ALIMI_TRAINS  에  "2450":1         추가
+  // ============================================================
   var SCHED_WEEKDAY={"2446":"21:22","2516":"25:00"};
   var SCHED_WEEKEND={"2376":"21:01","2388":"21:36","2398":"22:04","2408":"22:35","2412":"22:48","2418":"23:09","2424":"23:30","2428":"23:44","2432":"24:00"};
   // 주박열차 (차량기지에 밤새 머무는 열차)
