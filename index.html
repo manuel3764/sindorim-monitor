@@ -52,6 +52,7 @@
   .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
   @media(max-width:720px){.cards{grid-template-columns:1fr}}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card-memo{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
   .card.daerim{border:2px solid var(--danger)}
   .card.found{border-color:var(--info)}
   .card-head{display:flex;justify-content:space-between;align-items:baseline}
@@ -134,6 +135,16 @@
   .full-group-body{padding:8px 0 4px}
   .wait{margin-top:12px;font-size:13px;color:var(--hint);line-height:1.5}
   .daerim-tag{margin-top:6px;font-size:13px;color:var(--danger)}
+  /* 메모 칸 */
+  .group-select{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .gs-label{font-size:13px;color:var(--muted);margin-right:2px}
+  .gs-btn{background:var(--surface2);border:1px solid var(--line);color:var(--muted);
+    font-size:13px;font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer}
+  .gs-btn.sel{background:var(--info);border-color:var(--info);color:#fff}
+  .memo-input{width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--line);
+    color:var(--text);font-size:14px;padding:9px 12px;border-radius:8px;outline:none}
+  .memo-input::placeholder{color:var(--hint)}
+  .memo-input:focus{border-color:var(--info)}
 
   /* 전체 현황 */
   .columns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
@@ -288,6 +299,13 @@
   <!-- 페이지 1: 입고 알리미 -->
   <div class="page active" id="page-alimi">
     <div class="daymode" id="daymode"></div>
+    <div class="group-select" id="group-select" style="display:none">
+      <span class="gs-label">내 조:</span>
+      <button class="gs-btn" data-mygroup="A">A조</button>
+      <button class="gs-btn" data-mygroup="B">B조</button>
+      <button class="gs-btn" data-mygroup="C">C조</button>
+      <button class="gs-btn" data-mygroup="D">D조</button>
+    </div>
     <div class="cards" id="cards"></div>
     <div class="notice" id="notice-alimi"></div>
   </div>
@@ -510,10 +528,47 @@
   // ===== 렌더: 입고 알리미 =====
   // 입고 시간표(SCHED)의 각 열차를 카드로 표시. 실시간 데이터와 매칭해 현재 위치·지연 표시.
   // 대림역에 도착하면 알람을 띄운다.
+  // 메모: Cloudflare KV에 저장하여 모두 공유 (Worker 경유)
+  // 내 조는 기기에 저장(각자 다름), 메모 내용은 서버에 저장(공유)
+  function getMyGroup(){try{return localStorage.getItem("mygroup")||"D";}catch(e){return "D";}}  // 기본 D조
+  function setMyGroup(g){try{localStorage.setItem("mygroup",g);}catch(e){}}
+  var MEMO_CACHE={};   // 서버에서 받아온 메모 전체 {조_열차번호: 메모}
+  var memoTimers={};   // 입력 디바운스 타이머
+  function memoKey(no){return getMyGroup()+"_"+no;}  // 예: D_2376
+  function getMemo(no){return MEMO_CACHE[memoKey(no)]||"";}
+  // 입력 시: 캐시 즉시 갱신 + 1.5초 후 서버 저장 (쓰기 횟수 절약)
+  function setMemo(no,v){
+    var k=memoKey(no);
+    MEMO_CACHE[k]=v;
+    clearTimeout(memoTimers[k]);
+    memoTimers[k]=setTimeout(function(){
+      fetch(WORKER_URL+"?memo=save",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:k,value:v})
+      }).catch(function(){});
+    },1500);
+  }
+  // 서버에서 메모 전체 불러오기 (페이지 로드 시 1회 + 가끔 갱신)
+  function loadMemos(){
+    fetch(WORKER_URL+"?memo=list").then(function(r){return r.json();}).then(function(d){
+      MEMO_CACHE=d||{};
+      if(CURRENT_TAB==="alimi"&&LATEST&&LATEST.length)renderAlimi(LATEST,null);
+    }).catch(function(){});
+  }
+
   function renderAlimi(list, err){
     var sched=schedule(),weekend=isHoliday(serviceDate());
     var schedCount=Object.keys(sched).length;
     document.getElementById("daymode").textContent=weekend?"토·일·공휴일 모드 · 대상 "+schedCount+"대":"평일 모드 · 대상 "+schedCount+"대";
+    // 주말일 때만 조 선택 버튼 표시 + 현재 조 강조
+    var gsel=document.getElementById("group-select");
+    gsel.style.display=weekend?"":"none";
+    if(weekend){
+      var myg=getMyGroup();
+      gsel.querySelectorAll(".gs-btn").forEach(function(b){
+        b.classList.toggle("sel",b.getAttribute("data-mygroup")===myg);
+      });
+    }
     var map={};  // 시간표 번호 → 실시간 데이터
     list.forEach(function(t){
       if(t.updnLine!=="0") return;
@@ -549,9 +604,21 @@
       }else{
         html+='<div class="wait">운행 목록에 없음</div>';
       }
+      // 주말 입고열차(주박 제외)에 메모 칸
+      if(weekend&&!isStable){
+        html+='<div class="card-memo">';
+        html+='<input class="memo-input" data-memo="'+no+'" placeholder="'+getMyGroup()+'조 담당자/메모 입력" value="'+esc(getMemo(no))+'">';
+        html+='</div>';
+      }
       html+='</div>';
     });
     document.getElementById("cards").innerHTML=html;
+    // 메모 입력 이벤트 바인딩
+    var cardsEl=document.getElementById("cards");
+    cardsEl.querySelectorAll(".memo-input").forEach(function(inp){
+      inp.addEventListener("click",function(e){e.stopPropagation();});
+      inp.addEventListener("input",function(){setMemo(this.getAttribute("data-memo"),this.value);});
+    });
     var n="";
     if(err){n="연결 오류: "+err;}
     document.getElementById("notice-alimi").textContent=n;
@@ -875,6 +942,14 @@
   }
   renderSched();
 
+  // 조 선택 버튼: 누르면 내 조 저장하고 입고 알리미 다시 렌더 (그 조 메모로 전환)
+  document.querySelectorAll("#group-select .gs-btn").forEach(function(b){
+    b.addEventListener("click",function(){
+      setMyGroup(this.getAttribute("data-mygroup"));
+      renderAlimi(LATEST,null);
+    });
+  });
+
   // ===== 전체 시간표 (역 기준 / 열차 기준) =====
   var FULL_INIT=false;
   function initFullSched(){
@@ -1031,6 +1106,7 @@
   }
 
   // ===== 폴링 =====
+  var pollCount=0;
   function poll(){
     var st=document.getElementById("status");
     fetch(WORKER_URL).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
@@ -1045,6 +1121,9 @@
         document.getElementById("src").textContent="";
         renderBoth([],e.message||"네트워크 오류");
       });
+    // 메모는 3번에 1번꼴(약 1분)로 갱신 — 다른 사람이 바꾼 것 반영
+    if(pollCount%3===0) loadMemos();
+    pollCount++;
   }
 
   // ===== 수동 새로고침 =====
