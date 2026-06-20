@@ -93,6 +93,17 @@
   .detail-table tr.now td{background:#f5d000;color:#1a1a1a;font-weight:700}
   body.light .detail-table tr.now td{background:#ffd93b;color:#1a1a1a}
   .card,.train,.tcard,.sched-row{cursor:pointer}
+  /* 우하단 '곧 도착 입고열차' 미니 위젯 */
+  .mini-widget{display:none;position:fixed;right:16px;bottom:16px;z-index:90;
+    background:var(--surface);border:1px solid var(--info);border-radius:14px;
+    padding:12px 16px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer;
+    min-width:150px;max-width:220px}
+  .mini-widget.show{display:block}
+  .mini-widget.daerim{border-color:var(--danger)}
+  .mw-label{font-size:11px;color:var(--muted);margin-bottom:4px}
+  .mw-no{font-size:22px;font-weight:800;line-height:1.1}
+  .mw-loc{font-size:13px;color:var(--info);margin-top:3px;font-weight:600}
+  .mini-widget.daerim .mw-loc{color:var(--danger)}
   /* 전체 시간표 */
   .full-controls{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
   .full-controls select,.full-controls input{background:var(--surface);border:1px solid var(--line);
@@ -240,6 +251,13 @@
     <div class="detail-body" id="detail-body"></div>
   </div>
 
+  <!-- 다른 탭에서 볼 때 우하단에 뜨는 '가장 가까운 입고열차' 위젯 -->
+  <div class="mini-widget" id="mini-widget" data-train="">
+    <div class="mw-label">🚇 곧 도착 입고열차</div>
+    <div class="mw-no" id="mw-no"></div>
+    <div class="mw-loc" id="mw-loc"></div>
+  </div>
+
   <div class="alarm" id="alarm">
     <div>
       <div style="font-size:80px;line-height:1">🔔</div>
@@ -378,11 +396,14 @@
   var SCHED_WEEKEND={"2376":"21:01","2388":"21:36","2398":"22:04","2408":"22:35","2412":"22:48","2418":"23:09","2424":"23:30","2428":"23:44","2432":"24:00"};
   // 주박열차 (차량기지에 밤새 머무는 열차)
   var STABLE_TRAINS={"2516":1,"2432":1,"2523":1,"2423":1};
-  var STATUS={"0":"진입","1":"도착","2":"출발","3":"접근"};
+  var STATUS={"0":"진입","1":"도착","2":"출발","3":"접근"};  // API trainSttus 코드 → 한글
+  // DETECTED: 데이터 수신 성공 여부 / FIRED: 이미 알람 울린 열차 기록 (중복 방지)
+  // LAST_POLL: 마지막 갱신 시각(ms) / LATEST: 최근 받은 열차 목록 (탭 전환 시 즉시 재렌더용)
   var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0;
-  var LATEST=[]; // 최근 응답 (탭 전환 시 즉시 재렌더용)
+  var LATEST=[];
 
-  // ===== 공휴일 =====
+  // ===== 공휴일 (대체공휴일 포함, 2026~2027) =====
+  // 토·일은 자동으로 주말 처리되고, 여기 적힌 날짜는 평일이어도 '주말 시간표'로 동작
   var HOLIDAYS={
     "2026-01-01":1,"2026-02-16":1,"2026-02-17":1,"2026-02-18":1,
     "2026-03-02":1,"2026-05-05":1,"2026-05-25":1,"2026-06-03":1,
@@ -400,9 +421,10 @@
     if(d.getHours()<1){d=new Date(d.getTime()-2*60*60*1000);} // 1시 이전이면 2시간 빼서 확실히 전날로
     return d;
   }
-  function isHoliday(d){var x=d.getDay();if(x===0||x===6)return true;return !!HOLIDAYS[ymd(d)];}
-  function schedule(){return isHoliday(serviceDate())?SCHED_WEEKEND:SCHED_WEEKDAY;}
-  function schedMin(h){var p=h.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}
+  function isHoliday(d){var x=d.getDay();if(x===0||x===6)return true;return !!HOLIDAYS[ymd(d)];}  // 토(6)·일(0)·공휴일 = true
+  function schedule(){return isHoliday(serviceDate())?SCHED_WEEKEND:SCHED_WEEKDAY;}  // 오늘에 맞는 입고 시간표 반환
+  function schedMin(h){var p=h.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);}  // "HH:MM" → 분
+  // (구버전) 입고 시간표 시각과 현재 시각의 단순 차이. 현재는 calcRealDelay 사용
   function delayMin(hhmm){
     var s=schedMin(hhmm);if(s>=1440)s-=1440;
     var n=new Date();return n.getHours()*60+n.getMinutes()-s;
@@ -427,30 +449,32 @@
     return null;
   }
 
-  // 실시간 열차의 현재 위치 기준 지연(분) 계산. null이면 계산 불가
+  // 실시간 열차의 현재 위치 기준 지연(분) 계산. 양수=지연, 음수=조기, null=계산 불가
   function calcRealDelay(trainNo, statnNm){
     var train=findSchedTrain(trainNo);
-    if(!train) return null;
+    if(!train) return null;  // 시간표에 없는 열차(임시열차 9xxx 등)
+    // 현재 역의 시간표상 통과 시각 찾기 (역명 부분일치 허용)
     var stations=train.st, schedStr=null;
     if(stations[statnNm]!=null){schedStr=stations[statnNm];}
     else{
       for(var k in stations){if(statnNm.indexOf(k)>=0||k.indexOf(statnNm)>=0){schedStr=stations[k];break;}}
     }
-    if(schedStr==null) return null;
+    if(schedStr==null) return null;  // 이 역은 그 열차 경로에 없음
     var schedM=hm2min(schedStr);
     var n=new Date();
     var nowM=n.getHours()*60+n.getMinutes();
-    if(n.getHours()<2) nowM+=1440;
-    if(schedM<300) schedM+=1440;
+    if(n.getHours()<2) nowM+=1440;   // 새벽 운행: 현재시각 +24h 환산 (자정 넘김 처리)
+    if(schedM<300) schedM+=1440;      // 시간표도 새벽이면 +24h (예: 25:00=1500)
     return nowM-schedM;
   }
 
-  // ===== 본선 역 순서 (신도림 기준 정렬) =====
+  // ===== 본선 역 순서 (시청부터 시계방향, 신도림까지 거리 계산용) =====
   var LOOP=["시청","을지로입구","을지로3가","을지로4가","동대문역사문화공원","신당","상왕십리","왕십리","한양대","뚝섬","성수","건대입구","구의","강변","잠실나루","잠실","신천","종합운동장","삼성","선릉","역삼","강남","교대","서초","방배","사당","낙성대","서울대입구","봉천","신림","신대방","구로디지털단지","대림","신도림","문래","영등포구청","당산","합정","홍대입구","신촌","이대","아현","충정로"];
-  var NLOOP=LOOP.length, SIDX=LOOP.indexOf("신도림");
+  var NLOOP=LOOP.length, SIDX=LOOP.indexOf("신도림");  // SIDX=신도림 위치
+  // 역명으로 LOOP 인덱스 찾기 (정확히 없으면 부분일치)
   function loopPos(name){var n=name||"";var p=LOOP.indexOf(n);if(p>=0)return p;for(var i=0;i<NLOOP;i++){if(n.indexOf(LOOP[i])>=0)return i;}return -1;}
-  function distInner(name){var p=loopPos(name);if(p<0)return 999;return (SIDX-p+NLOOP)%NLOOP;}
-  function distOuter(name){var p=loopPos(name);if(p<0)return 999;return (p-SIDX+NLOOP)%NLOOP;}
+  function distInner(name){var p=loopPos(name);if(p<0)return 999;return (SIDX-p+NLOOP)%NLOOP;}  // 내선: 신도림까지 남은 역 수
+  function distOuter(name){var p=loopPos(name);if(p<0)return 999;return (p-SIDX+NLOOP)%NLOOP;}  // 외선: 신도림까지 남은 역 수
 
   // ===== 지선 판별 =====
   var BRANCH_STATIONS=["용답","신답","용두","도림천","양천구청"];
@@ -484,6 +508,8 @@
   }
 
   // ===== 렌더: 입고 알리미 =====
+  // 입고 시간표(SCHED)의 각 열차를 카드로 표시. 실시간 데이터와 매칭해 현재 위치·지연 표시.
+  // 대림역에 도착하면 알람을 띄운다.
   function renderAlimi(list, err){
     var sched=schedule(),weekend=isHoliday(serviceDate());
     var schedCount=Object.keys(sched).length;
@@ -529,14 +555,43 @@
     var n="";
     if(err){n="연결 오류: "+err;}
     document.getElementById("notice-alimi").textContent=n;
-    // 대림역 알람 체크
+    // 대림역 알람 체크: 입고열차가 대림역(신도림 직전역)에 오면 1회만 알람.
+    // FIRED에 기록해 같은 열차로 반복 알람 방지. renderBoth에서 매 갱신 호출되므로 어느 탭이든 작동.
     nums.forEach(function(no){
       var info=map[no];
       if(info&&info.statnNm.indexOf("대림")>=0&&!FIRED[no]){FIRED[no]=true;showAlarm(no,info);}
     });
+    updateMiniWidget(map);  // 우하단 위젯 갱신
+  }
+
+  // ===== 우하단 미니 위젯 =====
+  // 운행 중인 입고열차 중 신도림에 가장 가까운 1대를 표시. 없으면 숨김.
+  // 입고 알리미 탭을 보고 있을 땐 숨김(중복이라).
+  var CURRENT_TAB="alimi";
+  function updateMiniWidget(map){
+    var best=null, bestDist=999;
+    Object.keys(map).forEach(function(no){
+      var info=map[no];
+      var p=loopPos(info.statnNm);
+      if(p<0) return;
+      var d=(SIDX-p+NLOOP)%NLOOP;  // 신도림까지 남은 역 수 (내선)
+      if(d<bestDist){bestDist=d;best={no:no,info:info,dist:d};}
+    });
+    var w=document.getElementById("mini-widget");
+    // 입고 알리미 탭이거나, 운행 중 입고열차가 없으면 숨김
+    if(CURRENT_TAB==="alimi"||!best){w.classList.remove("show");return;}
+    var info=best.info;
+    var daerim=info.statnNm.indexOf("대림")>=0;
+    document.getElementById("mw-no").textContent=best.no;
+    var locText=best.dist===0?"신도림 도착":(info.statnNm+" · "+best.dist+"역 전");
+    document.getElementById("mw-loc").textContent=locText;
+    w.setAttribute("data-train",best.no);
+    w.classList.toggle("daerim",daerim);
+    w.classList.add("show");
   }
 
   // ===== 렌더: 전체 현황 =====
+  // 전체 현황의 열차 한 줄(HTML) 생성. dist=신도림까지 남은 역 수
   function trainRow(t,dist){
     var s=t.trainSttus||"",loc=esc(t.statnNm||""),term=esc(t.statnTnm||""),tno=esc(t.trainNo);
     var dl="";
@@ -754,10 +809,13 @@
 
   // ===== 탭 전환 =====
   function switchTab(which){
+    CURRENT_TAB=which;
     ["alimi","sched","all","track","full"].forEach(function(w){
       document.getElementById("tab-"+w).classList.toggle("active",which===w);
       document.getElementById("page-"+w).classList.toggle("active",which===w);
     });
+    // 탭 바뀌면 위젯 표시 여부 즉시 재평가 (최근 데이터로)
+    if(LATEST&&LATEST.length)renderAlimi(LATEST,null);
   }
   document.getElementById("tab-alimi").addEventListener("click",function(){switchTab("alimi");});
   document.getElementById("tab-all").addEventListener("click",function(){switchTab("all");});
