@@ -216,20 +216,11 @@
   .train-anim .rail{position:absolute;bottom:8px;left:0;right:0;height:4px;
     background:repeating-linear-gradient(90deg,var(--danger) 0 12px,transparent 12px 20px);
     opacity:.5;border-radius:2px}
-  .train-anim .moving-train{position:absolute;bottom:10px;left:-130px;font-size:34px;white-space:nowrap;
-    will-change:transform;transform:translateZ(0);
+  .train-anim .moving-train{position:absolute;bottom:10px;font-size:34px;white-space:nowrap;
     animation:trainRun 2.5s linear infinite}
   @keyframes trainRun{
-    0%{transform:translateX(0) translateZ(0)}
-    100%{transform:translateX(450px) translateZ(0)}
-  }
-  /* 동작 줄이기 설정이어도 알람 애니메이션은 강제 실행 (안전 알림) */
-  @media(prefers-reduced-motion:reduce){
-    .alarm.show{animation:alarmPulse 1s ease-in-out infinite !important}
-    body.light .alarm.show{animation:alarmPulseLight 1s ease-in-out infinite !important}
-    .alarm.show > div{animation:alarmPop .45s cubic-bezier(.34,1.56,.64,1) !important}
-    .alarm-bell{animation:bellRing .7s ease-in-out infinite !important}
-    .train-anim .moving-train{animation:trainRun 2.5s linear infinite !important}
+    0%{left:-130px}
+    100%{left:320px}
   }
   /* 큰 화면(태블릿/PC): 알람 요소들 크게 */
   @media(min-width:601px){
@@ -242,8 +233,8 @@
     #alarm > div > div:first-child{font-size:110px !important}
   }
   @keyframes trainRunBig{
-    0%{transform:translateX(0) translateZ(0)}
-    100%{transform:translateX(790px) translateZ(0)}
+    0%{left:-230px}
+    100%{left:600px}
   }
 
   /* 열차 추적 */
@@ -778,17 +769,7 @@
   function showAlarm(no,info){
     ALARM_NO=no;
     updateAlarmContent(no,info);
-    var el=document.getElementById("alarm");
-    // 알람 내부 애니메이션 요소들 (박스/종/열차)
-    var animEls=[el.querySelector("div"), el.querySelector(".alarm-bell"), el.querySelector(".moving-train")];
-    // 1) 모든 애니메이션 끄기
-    el.classList.remove("show");
-    animEls.forEach(function(x){if(x)x.style.animation="none";});
-    // 2) 리플로우 강제 (이 줄이 있어야 재시작됨)
-    void el.offsetWidth;
-    // 3) 인라인 끄기 해제 → CSS 애니메이션 다시 적용 + show 부여
-    animEls.forEach(function(x){if(x)x.style.animation="";});
-    el.classList.add("show");
+    document.getElementById("alarm").classList.add("show");
   }
   // 알람 내용 채우기 (위치/지연 갱신 시 재호출됨)
   function updateAlarmContent(no,info){
