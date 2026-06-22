@@ -179,6 +179,23 @@
   .alarm{display:none;position:fixed;inset:0;background:#3a1f1d;
     align-items:center;justify-content:center;text-align:center;z-index:99;padding:24px}
   .alarm.show{display:flex;animation:alarmPulse 1s ease-in-out infinite}
+  /* 알람 내용 박스: 확 커지며 등장 */
+  .alarm.show > div{animation:alarmPop .45s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes alarmPop{
+    0%{transform:scale(.3);opacity:0}
+    60%{transform:scale(1.08);opacity:1}
+    100%{transform:scale(1)}
+  }
+  /* 종 흔들기 (딸랑딸랑) */
+  .alarm-bell{display:inline-block;transform-origin:50% 0;animation:bellRing .7s ease-in-out infinite}
+  @keyframes bellRing{
+    0%,100%{transform:rotate(0)}
+    15%{transform:rotate(18deg)}
+    30%{transform:rotate(-15deg)}
+    45%{transform:rotate(11deg)}
+    60%{transform:rotate(-8deg)}
+    75%{transform:rotate(4deg)}
+  }
   @keyframes alarmPulse{0%,100%{background:#3a1f1d}50%{background:#5a2a26}}
   .alarm-train{font-size:64px;font-weight:800;color:var(--danger);margin-top:8px;letter-spacing:2px}
   .alarm-msg{font-size:28px;font-weight:700;color:var(--danger);margin-top:4px}
@@ -305,7 +322,7 @@
 
   <div class="alarm" id="alarm">
     <div>
-      <div style="font-size:80px;line-height:1">🔔</div>
+      <div class="alarm-bell" style="font-size:80px;line-height:1">🔔</div>
       <div class="alarm-train" id="alarm-train">2446</div>
       <div class="alarm-msg" id="alarm-msg">대림역 도착</div>
       <!-- 열차가 선로 위를 달리는 애니메이션 (측면 4량) -->
