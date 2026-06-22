@@ -216,11 +216,18 @@
   .train-anim .rail{position:absolute;bottom:8px;left:0;right:0;height:4px;
     background:repeating-linear-gradient(90deg,var(--danger) 0 12px,transparent 12px 20px);
     opacity:.5;border-radius:2px}
-  .train-anim .moving-train{position:absolute;bottom:10px;font-size:34px;white-space:nowrap;
+  .train-anim .moving-train{position:absolute;bottom:10px;left:-130px;font-size:34px;white-space:nowrap;
+    will-change:transform;transform:translateZ(0);
     animation:trainRun 2.5s linear infinite}
   @keyframes trainRun{
-    0%{left:-130px}
-    100%{left:320px}
+    0%{transform:translateX(0) translateZ(0)}
+    100%{transform:translateX(450px) translateZ(0)}
+  }
+  /* 동작 줄이기 설정이어도 알람 애니메이션은 강제 실행 (안전 알림) */
+  @media(prefers-reduced-motion:reduce){
+    .alarm.show,.alarm.show > div,.alarm-bell,.train-anim .moving-train{
+      animation-duration:inherit !important;
+    }
   }
   /* 큰 화면(태블릿/PC): 알람 요소들 크게 */
   @media(min-width:601px){
@@ -233,8 +240,8 @@
     #alarm > div > div:first-child{font-size:110px !important}
   }
   @keyframes trainRunBig{
-    0%{left:-230px}
-    100%{left:600px}
+    0%{transform:translateX(0) translateZ(0)}
+    100%{transform:translateX(790px) translateZ(0)}
   }
 
   /* 열차 추적 */
