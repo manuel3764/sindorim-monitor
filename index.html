@@ -778,7 +778,12 @@
   function showAlarm(no,info){
     ALARM_NO=no;
     updateAlarmContent(no,info);
-    document.getElementById("alarm").classList.add("show");
+    var el=document.getElementById("alarm");
+    // 애니메이션 강제 재시작: show 떼고 → 리플로우 → 다시 붙임
+    // (테마 변경/재호출 후에도 모바일에서 애니메이션이 다시 재생되도록)
+    el.classList.remove("show");
+    void el.offsetWidth;  // 리플로우 강제 (이 줄이 있어야 재시작됨)
+    el.classList.add("show");
   }
   // 알람 내용 채우기 (위치/지연 갱신 시 재호출됨)
   function updateAlarmContent(no,info){
