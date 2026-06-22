@@ -16,7 +16,7 @@
   body.light{
     --bg:#f4f5f7; --surface:#ffffff; --surface2:#e8eaed;
     --text:#1a1b1e; --muted:#5f6168; --hint:#9a9ba0;
-    --line:#d8dade; --info:#2563eb; --danger:#dc2626; --danger-bg:#fef2f2;
+    --line:#d8dade; --info:#2563eb; --danger:#dc2626; --danger-bg:#7f1d1d;
     --success:#16a34a;
     --inner:#16a34a; --outer:#d97706; --branch:#7c3aed;
   }
@@ -176,15 +176,49 @@
 
   .notice{margin-top:18px;font-size:12px;color:var(--hint);line-height:1.7}
 
-  .alarm{display:none;position:fixed;inset:0;background:var(--danger-bg);
+  .alarm{display:none;position:fixed;inset:0;background:#3a1f1d;
     align-items:center;justify-content:center;text-align:center;z-index:99;padding:24px}
-  .alarm.show{display:flex}
-  .alarm-train{font-size:64px;font-weight:700;color:var(--danger);margin-top:8px}
-  .alarm-msg{font-size:26px;color:var(--danger);margin-top:4px}
+  .alarm.show{display:flex;animation:alarmPulse 1s ease-in-out infinite}
+  @keyframes alarmPulse{0%,100%{background:#3a1f1d}50%{background:#5a2a26}}
+  .alarm-train{font-size:64px;font-weight:800;color:var(--danger);margin-top:8px;letter-spacing:2px}
+  .alarm-msg{font-size:28px;font-weight:700;color:var(--danger);margin-top:4px}
   .alarm-sub{font-size:16px;color:var(--text);opacity:.8;margin-top:16px}
   .alarm button{margin-top:24px;background:transparent;border:1px solid var(--danger);
     color:var(--danger);font-size:16px;padding:10px 28px;border-radius:10px;cursor:pointer}
   .alarm button:hover{background:rgba(226,85,74,.12)}
+  /* 라이트모드: 진한 배경 위 글씨/버튼 밝게 */
+  body.light .alarm-train{color:#fff}
+  body.light .alarm-msg{color:#fee2e2}
+  body.light .alarm-sub{color:#fff;opacity:.9}
+  body.light .alarm button{border-color:#fff;color:#fff}
+  body.light .alarm button:hover{background:rgba(255,255,255,.15)}
+  body.light .alarm.show{animation:alarmPulseLight 1s ease-in-out infinite}
+  @keyframes alarmPulseLight{0%,100%{background:#7f1d1d}50%{background:#a32020}}
+  /* 열차가 선로 위를 달리는 애니메이션 (측면 3량) */
+  .train-anim{position:relative;width:300px;max-width:88vw;height:60px;margin:24px auto 8px;overflow:hidden}
+  .train-anim .rail{position:absolute;bottom:8px;left:0;right:0;height:4px;
+    background:repeating-linear-gradient(90deg,var(--danger) 0 12px,transparent 12px 20px);
+    opacity:.5;border-radius:2px}
+  .train-anim .moving-train{position:absolute;bottom:10px;font-size:34px;white-space:nowrap;
+    animation:trainRun 2.5s linear infinite}
+  @keyframes trainRun{
+    0%{left:-130px}
+    100%{left:320px}
+  }
+  /* 큰 화면(태블릿/PC): 알람 요소들 크게 */
+  @media(min-width:601px){
+    .train-anim{width:560px;height:90px;margin:32px auto 8px}
+    .train-anim .moving-train{font-size:60px;bottom:14px;animation-name:trainRunBig}
+    .train-anim .rail{height:6px;bottom:10px}
+    .alarm-train{font-size:88px}
+    .alarm-msg{font-size:36px}
+    .alarm-sub{font-size:20px}
+    #alarm > div > div:first-child{font-size:110px !important}
+  }
+  @keyframes trainRunBig{
+    0%{left:-230px}
+    100%{left:600px}
+  }
 
   /* 열차 추적 */
   .track-input-row{display:flex;gap:8px;margin-bottom:20px}
@@ -274,6 +308,11 @@
       <div style="font-size:80px;line-height:1">🔔</div>
       <div class="alarm-train" id="alarm-train">2446</div>
       <div class="alarm-msg" id="alarm-msg">대림역 도착</div>
+      <!-- 열차가 선로 위를 달리는 애니메이션 (측면 4량) -->
+      <div class="train-anim">
+        <div class="rail"></div>
+        <div class="moving-train">🚃🚃🚃</div>
+      </div>
       <div class="alarm-sub" id="alarm-sub"></div>
       <button id="alarm-dismiss">확인</button>
     </div>
@@ -292,6 +331,7 @@
   <div class="statusbar">
     <span id="status">⏳ 연결 중…</span>
     <span class="src" id="src" style="font-size:12px;color:var(--hint)"></span>
+    <button class="mini" id="btn-test-alarm" style="font-size:13px;padding:3px 9px" title="대림역 알람 미리보기">🔔</button>
     <button class="mini" id="btn-theme" style="font-size:15px;padding:3px 10px">🌙</button>
     <span class="right"><span class="clock" id="clock"></span><span class="refresh" id="refresh"></span><button class="mini" id="btn-refresh" title="지금 갱신" style="padding:3px 8px;margin-left:4px;line-height:1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button></span>
   </div>
@@ -695,16 +735,42 @@
     document.getElementById("notice-all").textContent="전체 "+list.length+"대 · 내선 "+inner.length+" / 외선 "+outer.length+" / 지선 "+branch.length+" · 신도림 가까운 순";
   }
 
-  function renderBoth(list,err){LATEST=list;renderAlimi(list,err);renderAll(list);renderTrack(list);}
+  function renderBoth(list,err){
+    LATEST=list;renderAlimi(list,err);renderAll(list);renderTrack(list);
+    // 알람이 떠 있으면, 그 열차의 최신 위치로 알람 내용 갱신
+    if(ALARM_NO){
+      var t3=String(ALARM_NO).slice(-3);
+      var found=null;
+      list.forEach(function(x){if(String(x.trainNo).slice(-3)===t3)found=x;});
+      if(found) updateAlarmContent(ALARM_NO,found);
+      // 운행 목록에서 사라지면(입고 완료 등) 알람은 마지막 상태 유지
+    }
+  }
 
   // ===== 알람 =====
+  var ALARM_NO=null;  // 현재 알람에 표시 중인 열차번호 (떠있는 동안 위치 추적)
   function showAlarm(no,info){
-    document.getElementById("alarm-train").textContent=no;
-    document.getElementById("alarm-msg").textContent=info.statnNm+" 도착";
-    document.getElementById("alarm-sub").textContent="현재: "+info.statnNm+" "+(STATUS[info.trainSttus]||"")+" · 시간표 "+(schedule()[no]||"");
+    ALARM_NO=no;
+    updateAlarmContent(no,info);
     document.getElementById("alarm").classList.add("show");
   }
-  document.getElementById("alarm-dismiss").addEventListener("click",function(){document.getElementById("alarm").classList.remove("show");});
+  // 알람 내용 채우기 (위치/지연 갱신 시 재호출됨)
+  function updateAlarmContent(no,info){
+    document.getElementById("alarm-train").textContent=no;
+    var p=loopPos(info.statnNm);
+    var dist=p>=0?(SIDX-p+NLOOP)%NLOOP:null;
+    var msg=(dist===0)?"신도림역 도착":(info.statnNm+" 도착");
+    document.getElementById("alarm-msg").textContent=msg;
+    document.getElementById("alarm-sub").textContent="현재: "+info.statnNm+" "+(STATUS[info.trainSttus]||"")+" · 시간표 "+(schedule()[no]||"");
+  }
+  document.getElementById("alarm-dismiss").addEventListener("click",function(){
+    document.getElementById("alarm").classList.remove("show");
+    ALARM_NO=null;  // 닫으면 추적 중단
+  });
+  // 알람 테스트 버튼 (실제 열차 없이 알람 화면 미리보기)
+  document.getElementById("btn-test-alarm").addEventListener("click",function(){
+    showAlarm("0000",{statnNm:"대림",trainSttus:"1"});
+  });
 
   // ===== 열차 추적 =====
   // 각 항목: {no:"2446", alert:true}  (alert=신도림 도착 알림 on/off)
