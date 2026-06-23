@@ -176,27 +176,49 @@
 
   .notice{margin-top:18px;font-size:12px;color:var(--hint);line-height:1.7}
 
-  .alarm{display:none;position:fixed;inset:0;background:#3a1f1d;
-    align-items:center;justify-content:center;text-align:center;z-index:99;padding:24px}
-  .alarm.show{display:flex;animation:alarmPulse 1s ease-in-out infinite}
+  /* display 대신 visibility+opacity 사용 — Safari에서 자식 애니메이션 재시작 보장 */
+  .alarm{visibility:hidden;opacity:0;display:flex;position:fixed;inset:0;background:#3a1f1d;
+    align-items:center;justify-content:center;text-align:center;z-index:99;padding:24px;
+    pointer-events:none}
+  .alarm.show{visibility:visible;opacity:1;pointer-events:auto;
+    animation:alarmPulse 1s ease-in-out infinite;-webkit-animation:alarmPulse 1s ease-in-out infinite}
   /* 알람 내용 박스: 확 커지며 등장 */
-  .alarm.show > div{animation:alarmPop .45s cubic-bezier(.34,1.56,.64,1)}
+  .alarm.show > div{will-change:transform,opacity;
+    animation:alarmPop .45s cubic-bezier(.34,1.56,.64,1);
+    -webkit-animation:alarmPop .45s cubic-bezier(.34,1.56,.64,1)}
   @keyframes alarmPop{
     0%{transform:scale(.3);opacity:0}
     60%{transform:scale(1.08);opacity:1}
     100%{transform:scale(1)}
   }
+  @-webkit-keyframes alarmPop{
+    0%{-webkit-transform:scale(.3);opacity:0}
+    60%{-webkit-transform:scale(1.08);opacity:1}
+    100%{-webkit-transform:scale(1)}
+  }
   /* 종 흔들기 (딸랑딸랑) */
-  .alarm-bell{display:inline-block;transform-origin:50% 0;animation:bellRing .7s ease-in-out infinite}
+  .alarm-bell{display:inline-block;transform-origin:50% 0;will-change:transform;
+    animation:bellRing .7s ease-in-out infinite;-webkit-animation:bellRing .7s ease-in-out infinite}
   @keyframes bellRing{
-    0%,100%{transform:rotate(0)}
+    0%{transform:rotate(0)}
     15%{transform:rotate(18deg)}
     30%{transform:rotate(-15deg)}
     45%{transform:rotate(11deg)}
     60%{transform:rotate(-8deg)}
     75%{transform:rotate(4deg)}
+    100%{transform:rotate(0)}
+  }
+  @-webkit-keyframes bellRing{
+    0%{-webkit-transform:rotate(0)}
+    15%{-webkit-transform:rotate(18deg)}
+    30%{-webkit-transform:rotate(-15deg)}
+    45%{-webkit-transform:rotate(11deg)}
+    60%{-webkit-transform:rotate(-8deg)}
+    75%{-webkit-transform:rotate(4deg)}
+    100%{-webkit-transform:rotate(0)}
   }
   @keyframes alarmPulse{0%,100%{background:#3a1f1d}50%{background:#5a2a26}}
+  @-webkit-keyframes alarmPulse{0%,100%{background:#3a1f1d}50%{background:#5a2a26}}
   .alarm-train{font-size:64px;font-weight:800;color:var(--danger);margin-top:8px;letter-spacing:2px}
   .alarm-msg{font-size:28px;font-weight:700;color:var(--danger);margin-top:4px}
   .alarm-sub{font-size:16px;color:var(--text);opacity:.8;margin-top:16px}
@@ -209,23 +231,30 @@
   body.light .alarm-sub{color:#fff;opacity:.9}
   body.light .alarm button{border-color:#fff;color:#fff}
   body.light .alarm button:hover{background:rgba(255,255,255,.15)}
-  body.light .alarm.show{animation:alarmPulseLight 1s ease-in-out infinite}
+  body.light .alarm.show{animation:alarmPulseLight 1s ease-in-out infinite;
+    -webkit-animation:alarmPulseLight 1s ease-in-out infinite}
   @keyframes alarmPulseLight{0%,100%{background:#7f1d1d}50%{background:#a32020}}
+  @-webkit-keyframes alarmPulseLight{0%,100%{background:#7f1d1d}50%{background:#a32020}}
   /* 열차가 선로 위를 달리는 애니메이션 (측면 3량) */
   .train-anim{position:relative;width:300px;max-width:88vw;height:60px;margin:24px auto 8px;overflow:hidden}
   .train-anim .rail{position:absolute;bottom:8px;left:0;right:0;height:4px;
     background:repeating-linear-gradient(90deg,var(--danger) 0 12px,transparent 12px 20px);
     opacity:.5;border-radius:2px}
-  .train-anim .moving-train{position:absolute;bottom:10px;font-size:34px;white-space:nowrap;
-    animation:trainRun 2.5s linear infinite}
+  .train-anim .moving-train{position:absolute;bottom:10px;left:0;font-size:34px;white-space:nowrap;
+    will-change:transform;
+    animation:trainRun 2.5s linear infinite;-webkit-animation:trainRun 2.5s linear infinite}
   @keyframes trainRun{
-    0%{left:-130px}
-    100%{left:320px}
+    0%{transform:translateX(-130px)}
+    100%{transform:translateX(450px)}
+  }
+  @-webkit-keyframes trainRun{
+    0%{-webkit-transform:translateX(-130px)}
+    100%{-webkit-transform:translateX(450px)}
   }
   /* 큰 화면(태블릿/PC): 알람 요소들 크게 */
   @media(min-width:601px){
     .train-anim{width:560px;height:90px;margin:32px auto 8px}
-    .train-anim .moving-train{font-size:60px;bottom:14px;animation-name:trainRunBig}
+    .train-anim .moving-train{font-size:60px;bottom:14px;animation-name:trainRunBig;-webkit-animation-name:trainRunBig}
     .train-anim .rail{height:6px;bottom:10px}
     .alarm-train{font-size:88px}
     .alarm-msg{font-size:36px}
@@ -233,8 +262,12 @@
     #alarm > div > div:first-child{font-size:110px !important}
   }
   @keyframes trainRunBig{
-    0%{left:-230px}
-    100%{left:600px}
+    0%{transform:translateX(-230px)}
+    100%{transform:translateX(830px)}
+  }
+  @-webkit-keyframes trainRunBig{
+    0%{-webkit-transform:translateX(-230px)}
+    100%{-webkit-transform:translateX(830px)}
   }
 
   /* 열차 추적 */
@@ -769,7 +802,22 @@
   function showAlarm(no,info){
     ALARM_NO=no;
     updateAlarmContent(no,info);
-    document.getElementById("alarm").classList.add("show");
+    var el=document.getElementById("alarm");
+    el.classList.add("show");           // 먼저 보이게 (display:flex)
+    // 종·열차·등장 애니메이션을 매번 처음부터 재시작
+    // (이들은 페이지 로드 때부터 계속 돌고 있어서, 명시적으로 껐다 켜야 다시 재생됨)
+    restartAnim(el.querySelector("div"));            // 등장(팝) 박스
+    restartAnim(el.querySelector(".alarm-bell"));    // 종 흔들기
+    restartAnim(el.querySelector(".moving-train"));  // 달리는 열차
+  }
+  // 한 요소의 CSS 애니메이션을 처음부터 다시 재생 (iOS Safari 포함)
+  function restartAnim(node){
+    if(!node) return;
+    node.style.animation="none";
+    node.style.webkitAnimation="none";   // Safari용
+    void node.offsetWidth;               // 리플로우 강제 (반드시 보이는 상태에서)
+    node.style.animation="";
+    node.style.webkitAnimation="";       // CSS 원래 값 복귀 → 처음부터 재생
   }
   // 알람 내용 채우기 (위치/지연 갱신 시 재호출됨)
   function updateAlarmContent(no,info){
