@@ -1150,11 +1150,15 @@
       var info=book[key];
       if(info.st[stn]!=null){
         var isBranch=key.charAt(0)==="F";
+        // [방향 보정] line2_sched.json의 d값(IN/OUT)이 실제 내선/외선과 반대로 저장되어 있음
+        //  - 검증: d="IN" 열차의 정차역 순서가 LOOP 배열 기준 외선(역순) 진행과 일치 (본선 전 열차 확인)
+        //  - 지선(F)은 UP/DOWN 값이라 보정 대상 아님
+        var realDir=isBranch?info.d:(info.d==="IN"?"OUT":"IN");
         // 방향 필터: BRANCH는 지선만, IN/OUT은 해당 본선 방향만
         if(dir==="BRANCH"){ if(!isBranch) continue; }
-        else if(dir!=="all"){ if(isBranch||info.d!==dir) continue; }
+        else if(dir!=="all"){ if(isBranch||realDir!==dir) continue; }
         var fullNo=isBranch?key.slice(1):("2"+key);
-        rows.push({time:info.st[stn], no:fullNo, dir:info.d, end:info.end, branch:isBranch});
+        rows.push({time:info.st[stn], no:fullNo, dir:realDir, end:info.end, branch:isBranch});
       }
     }
     rows.sort(function(a,b){return hm2min(a.time)-hm2min(b.time);});
