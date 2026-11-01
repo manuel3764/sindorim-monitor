@@ -152,6 +152,35 @@
   .col-head{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
   .dot{width:10px;height:10px;border-radius:50%}
   .dot.inner{background:var(--inner)} .dot.outer{background:var(--outer)} .dot.branch{background:var(--branch)}
+  /* ===== 실시간 지도 ===== */
+  #page-map.active{display:flex;flex-direction:column}
+  .map-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:15px;color:var(--muted);flex-shrink:0}
+  .map-legend .ml-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+  .map-legend .ml-toggle input{width:16px;height:16px;accent-color:var(--info);cursor:pointer}
+  .map-legend .ml-dot{width:13px;height:13px;border-radius:50%;display:inline-block}
+  .map-legend .ml-info{margin-left:auto;color:var(--hint);font-size:13px}
+  .map-wrap{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px;overflow:hidden;display:flex;height:calc(100vh - 260px);min-height:420px}
+  #map-svg{width:100%;height:100%;display:block;touch-action:manipulation}
+  /* ── 지도 탭: PC 전체화면 꽉 채우기 ── */
+  body.map-fullscreen{padding:10px}
+  body.map-fullscreen .wrap{max-width:none}
+  body.map-fullscreen .map-wrap{height:calc(100vh - 150px)}
+  body.map-fullscreen .map-stn-label{font-size:20px}
+  body.map-fullscreen .map-stn-label.key{font-size:23px}
+  body.map-fullscreen .map-legend{font-size:17px}
+  .map-track-in{fill:none;stroke:var(--inner);stroke-width:3;opacity:.4}
+  .map-track-out{fill:none;stroke:var(--outer);stroke-width:3;opacity:.4}
+  .map-branch-line{fill:none;stroke:var(--branch);stroke-width:3;opacity:.45;stroke-dasharray:6 5}
+  .map-stn-dot{fill:var(--bg);stroke:var(--muted);stroke-width:1.6;cursor:pointer}
+  .map-stn-dot.key{stroke:var(--text);stroke-width:2.5;fill:var(--surface2)}
+  .map-stn-dot:hover{stroke:var(--info);stroke-width:2.8}
+  .map-stn-label{font-size:15px;fill:var(--muted);pointer-events:none;font-family:inherit}
+  .map-stn-label.key{fill:var(--text);font-weight:700;font-size:17px}
+  /* 열차 아이콘(각진 path) — 색은 JS 인라인 지정, 여기선 상호작용만 */
+  .map-train-box{cursor:pointer;transition:opacity .1s}
+  .map-train-box:hover{opacity:.82}
+  .map-train-box:hover path{stroke-width:4}
+  .map-hint{margin-top:8px;font-size:13px;color:var(--hint);text-align:center;flex-shrink:0}
   .colcount{font-size:13px;color:var(--muted);font-weight:400;margin-left:auto}
   .train{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px}
   .train .no{font-size:17px;font-weight:600;min-width:52px}
@@ -159,6 +188,18 @@
   .train .term{font-size:11px;color:var(--hint);margin-top:2px}
   .train.sindorim-term{border-color:#e2554a;background:rgba(226,85,74,.07)}
   .train.sindorim-term .term{color:#e2554a;font-weight:600}
+  /* 신도림 기준 막차 - 청록 */
+  .train.last-train{border-color:#22b8cf;background:rgba(34,184,207,.08)}
+  .train.last-train .term{color:#22b8cf;font-weight:600}
+  body.light .train.last-train{border-color:#0891b2;background:rgba(8,145,178,.07)}
+  body.light .train.last-train .term{color:#0891b2}
+  /* 전체 운행 현황 상단 색 설명 */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px}
+  .lg-item{display:flex;align-items:center;gap:6px}
+  .lg-box{width:14px;height:14px;border-radius:4px;border:1px solid}
+  .lg-box.ingo{border-color:#e2554a;background:rgba(226,85,74,.15)}
+  .lg-box.last{border-color:#22b8cf;background:rgba(34,184,207,.15)}
+  body.light .lg-box.last{border-color:#0891b2;background:rgba(8,145,178,.12)}
   .badge{font-size:11px;padding:2px 8px;border-radius:6px;white-space:nowrap;font-weight:600}
   /* 진입 - 파랑 */
   .badge.s0{background:rgba(74,144,226,.15);color:#4a90e2}
@@ -376,6 +417,7 @@
     <button class="tab" id="tab-track">열차 추적</button>
     <button class="tab" id="tab-sched">입고 시간표</button>
     <button class="tab" id="tab-full">전체 시간표</button>
+    <button class="tab" id="tab-map">실시간 지도</button>
   </div>
 
   <div class="statusbar">
@@ -401,6 +443,10 @@
 
   <!-- 페이지 2: 전체 현황 -->
   <div class="page" id="page-all">
+    <div class="legend">
+      <span class="lg-item"><span class="lg-box ingo"></span>입고</span>
+      <span class="lg-item"><span class="lg-box last"></span>막차</span>
+    </div>
     <div class="columns">
       <div>
         <div class="col-head"><span class="dot inner"></span> 내선 <span class="colcount" id="cnt-inner"></span></div>
@@ -478,6 +524,21 @@
     </div>
   </div>
 
+  <!-- 페이지 6: 실시간 지도 -->
+  <div class="page" id="page-map">
+    <div class="map-legend">
+      <label class="ml-toggle"><input type="checkbox" id="map-chk-in" checked><span class="ml-dot" style="background:#4CC97D"></span>내선</label>
+      <label class="ml-toggle"><input type="checkbox" id="map-chk-out" checked><span class="ml-dot" style="background:#F5B24A"></span>외선</label>
+      <label class="ml-toggle"><input type="checkbox" id="map-chk-br" checked><span class="ml-dot" style="background:#7fbf3f"></span>지선</label>
+      <span class="ml-item" style="display:flex;align-items:center;gap:6px"><span class="ml-dot" style="background:#00702F"></span><span class="ml-dot" style="background:#C25E00;margin-left:-4px"></span>신도림행(진한색)</span>
+      <span class="ml-info" id="map-info"></span>
+    </div>
+    <div class="map-wrap">
+      <svg id="map-svg" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="map-hint">열차를 누르면 상세 정보 · 20초마다 자동 갱신</div>
+  </div>
+
 </div>
 
 <script>
@@ -511,7 +572,8 @@
   var DETECTED=false, FIRED={}, WORKING_EP=null, LAST_POLL=0;
   var LATEST=[];
 
-  // ===== 공휴일 (대체공휴일 포함, 2026~2027) =====
+  // ===== 공휴일 (대체공휴일 포함, 2026~2030) =====
+  // 토·일에 겹치는 날은 자동 주말 처리되므로 평일 공휴일만 적음
   // 토·일은 자동으로 주말 처리되고, 여기 적힌 날짜는 평일이어도 '주말 시간표'로 동작
   var HOLIDAYS={
     "2026-01-01":1,"2026-02-16":1,"2026-02-17":1,"2026-02-18":1,
@@ -521,7 +583,19 @@
     "2027-01-01":1,"2027-02-08":1,"2027-02-09":1,"2027-02-10":1,
     "2027-03-01":1,"2027-05-05":1,"2027-05-13":1,"2027-07-19":1,
     "2027-08-16":1,"2027-09-14":1,"2027-09-15":1,"2027-09-16":1,
-    "2027-10-04":1,"2027-10-11":1,"2027-12-27":1
+    "2027-10-04":1,"2027-10-11":1,"2027-12-27":1,
+    "2028-01-26":1,"2028-01-27":1,"2028-01-28":1,"2028-03-01":1,
+    "2028-04-12":1,"2028-05-02":1,"2028-05-05":1,"2028-06-06":1,
+    "2028-07-17":1,"2028-08-15":1,"2028-10-02":1,"2028-10-03":1,
+    "2028-10-04":1,"2028-10-05":1,"2028-10-09":1,"2028-12-25":1,
+    "2029-01-01":1,"2029-02-12":1,"2029-02-13":1,"2029-02-14":1,
+    "2029-03-01":1,"2029-05-07":1,"2029-05-21":1,"2029-06-06":1,
+    "2029-07-17":1,"2029-08-15":1,"2029-09-21":1,"2029-09-24":1,
+    "2029-10-03":1,"2029-10-09":1,"2029-12-25":1,
+    "2030-01-01":1,"2030-02-04":1,"2030-02-05":1,"2030-03-01":1,
+    "2030-05-06":1,"2030-05-09":1,"2030-06-06":1,"2030-07-17":1,
+    "2030-08-15":1,"2030-09-11":1,"2030-09-12":1,"2030-09-13":1,
+    "2030-10-03":1,"2030-10-09":1,"2030-12-25":1
   };
   function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
   // 운행일 기준 날짜: 새벽 1시 이전은 전날로 취급 (지하철은 다음날 새벽 1시까지 운행)
@@ -600,6 +674,33 @@
     var tnm=t.statnTnm||"";
     if(tnm.indexOf("까치산")>=0||tnm.indexOf("신도림지선")>=0)return true;
     return false;
+  }
+
+  // ===== 신도림역 기준 막차 =====
+  // 오늘 시간표에서 방향별(내선/외선/까치산 지선)로 신도림을 가장 늦게 지나는 열차.
+  // 신도림 종착(입고) 열차는 제외.
+  var LAST_CACHE={book:null,ids:{}};
+  function sindorimLastIds(){
+    var book=curSchedBook(); if(!book) return {};
+    if(LAST_CACHE.book===book) return LAST_CACHE.ids;
+    var best={};
+    for(var k in book){
+      var info=book[k], tm=info.st&&info.st["신도림"];
+      if(tm==null) continue;
+      if(String(info.end||"").indexOf("신도림")>=0) continue;
+      var br=k.charAt(0)==="F";
+      var grp=br?"BRANCH":info.d;
+      var m=hm2min(tm);
+      if(!best[grp]||m>best[grp].m) best[grp]={id:(br?k:"M"+k),m:m};
+    }
+    var ids={}; for(var g in best) ids[best[g].id]=1;
+    LAST_CACHE={book:book,ids:ids};
+    return ids;
+  }
+  function isSindorimLast(t){
+    var ids=sindorimLastIds(), no=String(t.trainNo);
+    if(isBranch(t)) return !!ids["F"+no];
+    return !!ids["M"+no.slice(-3)];
   }
 
   function pad(n){return n<10?"0"+n:""+n;}
@@ -762,6 +863,7 @@
     var dl="";
     if(typeof dist==="number"&&dist<999){dl=dist===0?"신도림":"신도림까지 "+dist+"역";}
     var isSindorim=(t.statnTnm||"").indexOf("신도림")>=0;
+    var isLast=isSindorimLast(t);  // 신도림 기준 막차 (청록)
     // 실시간 지연 계산
     var delay=calcRealDelay(t.trainNo, t.statnNm);
     var delayHtml="";
@@ -770,7 +872,7 @@
       else if(delay<0) delayHtml=' <span class="rt-delay early">'+(-delay)+'분 빠름</span>';
       else delayHtml=' <span class="rt-delay ontime">정시</span>';
     }
-    var html='<div class="train'+(isSindorim?" sindorim-term":"")+'" data-train="'+tno+'"><span class="no">'+tno+'</span>';
+    var html='<div class="train'+(isSindorim?" sindorim-term":"")+(isLast?" last-train":"")+'" data-train="'+tno+'"><span class="no">'+tno+'</span>';
     html+='<span class="tloc">'+loc+delayHtml+'<div class="term">'+(dl?dl+" · ":"")+term+' 방면</div></span>';
     html+='<span class="badge s'+s+'">'+(STATUS[s]||"-")+'</span></div>';
     return html;
@@ -799,6 +901,7 @@
 
   function renderBoth(list,err){
     LATEST=list;renderAlimi(list,err);renderAll(list);renderTrack(list);
+    if(CURRENT_TAB==="map")renderMap(list);
     // 알람이 떠 있으면, 그 열차의 최신 위치로 알람 내용 갱신
     if(ALARM_NO){
       var t3=String(ALARM_NO).slice(-3);
@@ -861,6 +964,263 @@
       }catch(e){TRACK_LIST=[];}
     }
   })();
+  // ===== 실시간 지도 (가로형 노선도 + 방향성 열차 아이콘) =====
+  var MAP_XY={"시청":[90,70],"을지로입구":[187.3,70],"을지로3가":[284.7,70],"을지로4가":[382,70],"동대문역사문화공원":[479.3,70],"신당":[576.7,70],"상왕십리":[674,70],"왕십리":[771.3,70],"한양대":[868.7,70],"뚝섬":[966,70],"성수":[1063.3,70],"건대입구":[1160.7,70],"구의":[1258,70],"강변":[1355.3,70],"잠실나루":[1452.7,70],"잠실":[1550,70],"신천":[1550,140],"종합운동장":[1550,210],"삼성":[1550,280],"선릉":[1550,350],"역삼":[1550,420],"강남":[1550,490],"교대":[1550,560],"서초":[1445.7,560],"방배":[1341.4,560],"사당":[1237.1,560],"낙성대":[1132.9,560],"서울대입구":[1028.6,560],"봉천":[924.3,560],"신림":[820,560],"신대방":[715.7,560],"구로디지털단지":[611.4,560],"대림":[507.1,560],"신도림":[402.9,560],"문래":[298.6,560],"영등포구청":[194.3,560],"당산":[90,560],"합정":[90,490],"홍대입구":[90,420],"신촌":[90,350],"이대":[90,280],"아현":[90,210],"충정로":[90,140]};
+  var MAP_BR_XY={"용답":[1063.3,-30],"신답":[1063.3,-95],"용두":[1063.3,-160],"신설동":[1063.3,-225],"도림천":[402.9,630],"양천구청":[402.9,695],"신정네거리":[402.9,760],"까치산":[402.9,825]};
+  var MAP_KEY={"신도림":1,"성수":1,"대림":1,"문래":1,"시청":1,"강남":1,"사당":1,"까치산":1,"신설동":1,"잠실":1,"삼성":1,"당산":1};
+  var BR_SEONGSU=["성수","용답","신답","용두","신설동"];
+  var BR_SINJEONG=["신도림","도림천","양천구청","신정네거리","까치산"];
+  // 색상
+  var MC_IN="#4CC97D",  MC_IN_D="#2f9e5a";     // 일반 내선
+  var MC_OUT="#F5B24A", MC_OUT_D="#d18e28";    // 일반 외선
+  var MC_SDIN="#00702F",  MC_SDIN_D="#004d20"; // 신도림행 내선(진초록)
+  var MC_SDOUT="#C25E00", MC_SDOUT_D="#8f4500";// 신도림행 외선(진주황)
+  var MC_BR="#7fbf3f", MC_BR_D="#5c9124";      // 지선
+  var MAP_INIT=false;
+  var MAP_FILTER={in:true,out:true,br:true};
+  function mapXY(name){ return MAP_XY[name]||MAP_BR_XY[name]||null; }
+
+  function initMap(){
+    if(MAP_INIT) return;
+    MAP_INIT=true;
+    var svg=document.getElementById("map-svg");
+    var ns="http://www.w3.org/2000/svg";
+    // 본선 순환 폴리라인 (한 줄, 굵게)
+    var dmain="M"+LOOP.map(function(s){var p=MAP_XY[s];return p[0]+" "+p[1];}).join("L")+"Z";
+    var pMain=document.createElementNS(ns,"path");
+    pMain.setAttribute("d",dmain); pMain.setAttribute("fill","none");
+    pMain.setAttribute("stroke","#00A84D"); pMain.setAttribute("stroke-width","8");
+    pMain.setAttribute("stroke-linejoin","round"); pMain.setAttribute("opacity",".55");
+    svg.appendChild(pMain);
+    // 지선
+    function branchLine(stns){
+      var d="M"+stns.map(function(s){var p=mapXY(s);return p[0]+" "+p[1];}).join("L");
+      var pa=document.createElementNS(ns,"path");
+      pa.setAttribute("d",d); pa.setAttribute("fill","none");
+      pa.setAttribute("stroke",MC_BR); pa.setAttribute("stroke-width","6");
+      pa.setAttribute("stroke-linejoin","round"); pa.setAttribute("opacity",".55");
+      svg.appendChild(pa);
+    }
+    branchLine(BR_SEONGSU); branchLine(BR_SINJEONG);
+    // 역 원 + 라벨
+    var labelLayer=document.createElementNS(ns,"g");
+    labelLayer.setAttribute("id","map-labels");
+    var allStns=[].concat(LOOP, Object.keys(MAP_BR_XY));
+    allStns.forEach(function(s){
+      var p=mapXY(s); if(!p)return;
+      var key=MAP_KEY[s];
+      var c=document.createElementNS(ns,"circle");
+      c.setAttribute("cx",p[0]); c.setAttribute("cy",p[1]);
+      c.setAttribute("r",key?9:6.5);
+      c.setAttribute("fill","var(--surface)");
+      c.setAttribute("stroke", (s in MAP_XY)?"#00A84D":MC_BR);
+      c.setAttribute("stroke-width",key?3.5:2.5);
+      c.setAttribute("class","map-stn-dot"+(key?" key":""));
+      c.setAttribute("data-stn",s);
+      c.style.cursor="pointer";
+      c.addEventListener("click",function(){showMapStation(s);});
+      svg.appendChild(c);
+      var t=document.createElementNS(ns,"text");
+      var lx=p[0],ly=p[1],anchor="middle",rot=null;
+      if(s in MAP_XY){
+        if(p[1]<=72){ lx=p[0]; ly=p[1]-16; anchor="start"; rot=-40; }        // 상변
+        else if(p[1]>=558){ lx=p[0]; ly=p[1]+18; anchor="end"; rot=-40; }     // 하변
+        else if(p[0]<=92){ lx=p[0]-15; anchor="end"; ly=p[1]+6; }            // 좌변
+        else { lx=p[0]+15; anchor="start"; ly=p[1]+6; }                      // 우변
+      } else {
+        if(p[1]<0){ lx=p[0]+16; anchor="start"; ly=p[1]+5; }                 // 성수지선(수직·위): 오른쪽
+        else { lx=p[0]-16; anchor="end"; ly=p[1]+5; }                        // 신정지선(수직·아래): 왼쪽
+      }
+      t.setAttribute("x",lx); t.setAttribute("y",ly);
+      t.setAttribute("text-anchor",anchor);
+      if(rot!=null)t.setAttribute("transform","rotate("+rot+" "+lx+" "+ly+")");
+      t.setAttribute("class","map-stn-label"+(key?" key":""));
+      t.textContent=s;
+      labelLayer.appendChild(t);
+    });
+    var g=document.createElementNS(ns,"g");
+    g.setAttribute("id","map-trains"); svg.appendChild(g);
+    svg.appendChild(labelLayer);  // 라벨을 열차 위에 올려 역명이 안 가려지게
+    svg.setAttribute("viewBox","-120 -300 1810 1320");
+    var ci=document.getElementById("map-chk-in"),co=document.getElementById("map-chk-out"),cb=document.getElementById("map-chk-br");
+    function upd(){ MAP_FILTER={in:ci.checked,out:co.checked,br:cb.checked}; if(LATEST&&LATEST.length)renderMap(LATEST); }
+    ci.addEventListener("change",upd); co.addEventListener("change",upd); cb.addEventListener("change",upd);
+  }
+
+  // 상태→진행 비율(음수=이전역쪽, 양수=다음역쪽)
+  function stFrac(st){
+    if(st==="3")return -0.7;  // 접근
+    if(st==="0")return -0.35; // 진입
+    if(st==="1")return 0;     // 도착
+    if(st==="2")return 0.35;  // 출발
+    return 0;
+  }
+
+  // 지선 위치 (세로 이동)
+  function branchPos(t){
+    var cur=t.statnNm; var path=null;
+    if(BR_SEONGSU.indexOf(cur)>=0)path=BR_SEONGSU;
+    else if(BR_SINJEONG.indexOf(cur)>=0)path=BR_SINJEONG;
+    if(!path){ var p=mapXY(cur); return p?{xy:p,facing:"D"}:null; }
+    var i=path.indexOf(cur), st=t.trainSttus||"", frac=stFrac(st), tnm=t.statnTnm||"";
+    var forward = tnm.indexOf(path[path.length-1])>=0;
+    var pcur=mapXY(cur); if(!pcur)return null;
+    var xy=pcur, nextP=null;
+    var dir=forward?1:-1, fi=i+dir;
+    if(fi>=0&&fi<path.length)nextP=mapXY(path[fi]);
+    if(frac!==0){
+      var ni=i+(frac>0?dir:-dir);
+      if(ni>=0&&ni<path.length){ var np=mapXY(path[ni]),f=Math.abs(frac); xy=[pcur[0]+(np[0]-pcur[0])*f,pcur[1]+(np[1]-pcur[1])*f]; }
+    }
+    // 머리 방향: 다음 진행역이 위면 U, 아래면 D
+    var facing="D";
+    if(nextP) facing=(nextP[1]<pcur[1])?"U":"D";
+    return {xy:xy, facing:facing};
+  }
+
+  // 본선 위치. 내선(0)=LOOP 역순 진행, 외선(1)=정순
+  function mainPos(t){
+    var cur=t.statnNm; if(!cur)return null;
+    var idx=LOOP.indexOf(cur);
+    if(idx<0){ for(var i=0;i<LOOP.length;i++){ if(cur.indexOf(LOOP[i])>=0){idx=i;break;} } }
+    if(idx<0)return null;
+    var inner=(t.updnLine==="0");
+    var pcur=MAP_XY[LOOP[idx]]; if(!pcur)return null;
+    var frac=stFrac(t.trainSttus||"");
+    var step=inner?-1:1;
+    var xy=pcur, nextP=null;
+    // 다음 진행역(머리 방향 결정용)
+    var fwdIdx=(idx+step+LOOP.length)%LOOP.length;
+    nextP=MAP_XY[LOOP[fwdIdx]];
+    if(frac!==0){
+      var tgtIdx=idx+(frac>0?step:-step); tgtIdx=(tgtIdx+LOOP.length)%LOOP.length;
+      var np=MAP_XY[LOOP[tgtIdx]],f=Math.abs(frac);
+      if(np)xy=[pcur[0]+(np[0]-pcur[0])*f, pcur[1]+(np[1]-pcur[1])*f];
+    }
+    // 머리 방향: 진행하는 다음역 쪽으로. 가로변→좌우(R/L), 세로변→상하(U/D)
+    var facing="R";
+    if(nextP){
+      var ddx=nextP[0]-pcur[0], ddy=nextP[1]-pcur[1];
+      if(Math.abs(ddx)>=Math.abs(ddy)) facing=(ddx>=0)?"R":"L";
+      else facing=(ddy>=0)?"D":"U";
+    }
+    return {xy:xy, cls:inner?"in":"out", facing:facing};
+  }
+
+  // 각진 열차 아이콘 path 생성 (facing:'R'/'L'/'U'/'D'). 머리쪽이 진행방향으로 뾰족.
+  function trainPath(x,y,w,h,facing){
+    var r=h*0.32, nose=h*0.55;
+    if(facing==="R"){
+      return "M"+(x+r)+" "+y+" L"+(x+w-nose)+" "+y+" L"+(x+w)+" "+(y+h/2)+" L"+(x+w-nose)+" "+(y+h)+
+             " L"+(x+r)+" "+(y+h)+" Q"+x+" "+(y+h)+" "+x+" "+(y+h-r)+" L"+x+" "+(y+r)+" Q"+x+" "+y+" "+(x+r)+" "+y+" Z";
+    }
+    if(facing==="L"){
+      return "M"+(x+w-r)+" "+y+" L"+(x+nose)+" "+y+" L"+x+" "+(y+h/2)+" L"+(x+nose)+" "+(y+h)+
+             " L"+(x+w-r)+" "+(y+h)+" Q"+(x+w)+" "+(y+h)+" "+(x+w)+" "+(y+h-r)+" L"+(x+w)+" "+(y+r)+" Q"+(x+w)+" "+y+" "+(x+w-r)+" "+y+" Z";
+    }
+    // 세로 아이콘: 폭 w, 높이 h 그대로 쓰되 상하로 뾰족. nose를 세로 기준으로.
+    var vnose=h*0.42;
+    if(facing==="U"){ // 위로 진행(머리 위)
+      return "M"+x+" "+(y+vnose+r)+" L"+x+" "+(y+h-r)+" Q"+x+" "+(y+h)+" "+(x+r)+" "+(y+h)+
+             " L"+(x+w-r)+" "+(y+h)+" Q"+(x+w)+" "+(y+h)+" "+(x+w)+" "+(y+h-r)+" L"+(x+w)+" "+(y+vnose+r)+
+             " L"+(x+w/2)+" "+y+" Z";
+    }
+    // D: 아래로 진행(머리 아래)
+    return "M"+x+" "+(y+r)+" Q"+x+" "+y+" "+(x+r)+" "+y+" L"+(x+w-r)+" "+y+" Q"+(x+w)+" "+y+" "+(x+w)+" "+(y+r)+
+           " L"+(x+w)+" "+(y+h-vnose-r)+" L"+(x+w/2)+" "+(y+h)+" L"+x+" "+(y+h-vnose-r)+" Z";
+  }
+
+  function renderMap(list){
+    if(!MAP_INIT)return;
+    var g=document.getElementById("map-trains"); if(!g)return;
+    var ns="http://www.w3.org/2000/svg";
+    g.innerHTML="";
+    var n=0;
+    list.forEach(function(t){
+      var br=isBranch(t), cls, pos;
+      if(br){ if(!MAP_FILTER.br)return; pos=branchPos(t); cls="branch"; }
+      else {
+        var inner=(t.updnLine==="0");
+        if(inner&&!MAP_FILTER.in)return;
+        if(!inner&&!MAP_FILTER.out)return;
+        pos=mainPos(t); cls=inner?"in":"out";
+      }
+      if(!pos)return;
+      n++;
+      var no=String(t.trainNo||""), term=(t.statnTnm||"").replace(/방면$/,"");
+      var sd=(term.indexOf("신도림")>=0);
+      // 색 결정
+      var fill,stroke;
+      if(cls==="branch"){ fill=MC_BR; stroke=MC_BR_D; }
+      else if(cls==="in"){ fill=sd?MC_SDIN:MC_IN; stroke=sd?MC_SDIN_D:MC_IN_D; }
+      else { fill=sd?MC_SDOUT:MC_OUT; stroke=sd?MC_SDOUT_D:MC_OUT_D; }
+      // 역명은 순환선 바깥쪽에 있으므로, 열차는 안쪽으로 보내 겹침 방지.
+      // 내선/외선은 안쪽에서 거리 차로 구분(외선이 더 안쪽). 지선은 선 옆으로.
+      var cx0=820,cy0=315, ax=pos.xy[0], ay=pos.xy[1];
+      var dx=ax-cx0, dy=ay-cy0, len=Math.sqrt(dx*dx+dy*dy)||1;
+      var bx,by;
+      if(cls==="branch"){
+        // 지선(세로) → 옆으로: 성수지선은 오른쪽, 신정지선은 왼쪽으로
+        var side=(ay<cy0)?1:-1; // 위쪽 지선(성수)=오른쪽, 아래 지선(신정)=왼쪽
+        bx=ax+70*side; by=ay;
+      } else {
+        var OFF=(cls==="in")?-58:-104; // 둘 다 안쪽(-), 외선이 더 깊이
+        bx=ax+dx/len*OFF; by=ay+dy/len*OFF;
+      }
+      // 지시선
+      var leg=document.createElementNS(ns,"line");
+      leg.setAttribute("x1",ax); leg.setAttribute("y1",ay);
+      leg.setAttribute("x2",bx); leg.setAttribute("y2",by);
+      leg.setAttribute("stroke",stroke); leg.setAttribute("stroke-width","1.5"); leg.setAttribute("opacity",".5");
+      g.appendChild(leg);
+      var facing=pos.facing||"R";
+      var vertical=(facing==="U"||facing==="D");
+      // 가로 아이콘: 124x54, 세로 아이콘: 66x92 (세로로 길쭉)
+      var W=vertical?66:124, H=vertical?92:54;
+      var grp=document.createElementNS(ns,"g");
+      grp.setAttribute("class","map-train-box");
+      grp.setAttribute("data-train",esc(no)); grp.style.cursor="pointer";
+      var pa=document.createElementNS(ns,"path");
+      pa.setAttribute("d",trainPath(bx-W/2, by-H/2, W, H, facing));
+      pa.setAttribute("fill",fill); pa.setAttribute("stroke",stroke);
+      pa.setAttribute("stroke-width","2.5"); pa.setAttribute("stroke-linejoin","round");
+      grp.appendChild(pa);
+      // 텍스트: 머리 반대쪽으로 살짝 치우쳐 뾰족한 부분 피함
+      var tx=bx, ty1, ty2;
+      if(facing==="R"){ tx=bx-8; ty1=by-3; ty2=by+15; }
+      else if(facing==="L"){ tx=bx+8; ty1=by-3; ty2=by+15; }
+      else if(facing==="U"){ tx=bx; ty1=by+2; ty2=by+20; }   // 머리 위 → 글씨 아래쪽
+      else { tx=bx; ty1=by-10; ty2=by+8; }                    // 머리 아래 → 글씨 위쪽
+      var t1=document.createElementNS(ns,"text");
+      t1.setAttribute("x",tx); t1.setAttribute("y",ty1);
+      t1.setAttribute("text-anchor","middle"); t1.setAttribute("font-size","19");
+      t1.setAttribute("font-weight","800"); t1.setAttribute("fill","#fff");
+      t1.setAttribute("pointer-events","none"); t1.textContent=no;
+      grp.appendChild(t1);
+      var t2=document.createElementNS(ns,"text");
+      t2.setAttribute("x",tx); t2.setAttribute("y",ty2);
+      t2.setAttribute("text-anchor","middle"); t2.setAttribute("font-size","13.5");
+      t2.setAttribute("font-weight","600"); t2.setAttribute("fill","#fff");
+      t2.setAttribute("opacity",".95"); t2.setAttribute("pointer-events","none"); t2.textContent=term;
+      grp.appendChild(t2);
+      var ttl=document.createElementNS(ns,"title");
+      ttl.textContent=no+" · "+(t.statnNm||"")+" "+(STATUS[t.trainSttus]||"")+" · "+term+" 방면";
+      grp.appendChild(ttl);
+      g.appendChild(grp);  // 클릭은 하단 data-train 위임 핸들러가 openDetail 호출
+    });
+    var mi=document.getElementById("map-info");
+    if(mi)mi.textContent="표시 "+n+"대 · "+new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  }
+
+  function showMapStation(stn){
+    if(!LATEST||!LATEST.length)return;
+    var here=LATEST.filter(function(t){return (t.statnNm||"")===stn || (t.statnNm||"").indexOf(stn)>=0;});
+    var mi=document.getElementById("map-info");
+    if(mi){
+      mi.textContent=here.length? (stn+": "+here.map(function(t){return t.trainNo+"("+(STATUS[t.trainSttus]||"")+")";}).join(", ")) : (stn+": 열차 없음");
+    }
+  }
+
   function saveTrack(){localStorage.setItem("trackList",JSON.stringify(TRACK_LIST));}
 
   function renderTrack(list){
@@ -1016,10 +1376,11 @@
   // ===== 탭 전환 =====
   function switchTab(which){
     CURRENT_TAB=which;
-    ["alimi","sched","all","track","full"].forEach(function(w){
+    ["alimi","sched","all","track","full","map"].forEach(function(w){
       document.getElementById("tab-"+w).classList.toggle("active",which===w);
       document.getElementById("page-"+w).classList.toggle("active",which===w);
     });
+    document.body.classList.toggle("map-fullscreen",which==="map");
     // 탭 바뀌면 위젯 표시 여부 즉시 재평가 (최근 데이터로)
     if(LATEST&&LATEST.length)renderAlimi(LATEST,null);
   }
@@ -1027,6 +1388,7 @@
   document.getElementById("tab-all").addEventListener("click",function(){switchTab("all");});
   document.getElementById("tab-track").addEventListener("click",function(){switchTab("track");});
   document.getElementById("tab-full").addEventListener("click",function(){switchTab("full");initFullSched();});
+  document.getElementById("tab-map").addEventListener("click",function(){switchTab("map");initMap();if(LATEST&&LATEST.length)renderMap(LATEST);});
 
   // ===== 입출고 시간표 데이터 =====
   var TIMETABLE={
@@ -1150,15 +1512,11 @@
       var info=book[key];
       if(info.st[stn]!=null){
         var isBranch=key.charAt(0)==="F";
-        // [방향 보정] line2_sched.json의 d값(IN/OUT)이 실제 내선/외선과 반대로 저장되어 있음
-        //  - 검증: d="IN" 열차의 정차역 순서가 LOOP 배열 기준 외선(역순) 진행과 일치 (본선 전 열차 확인)
-        //  - 지선(F)은 UP/DOWN 값이라 보정 대상 아님
-        var realDir=isBranch?info.d:(info.d==="IN"?"OUT":"IN");
         // 방향 필터: BRANCH는 지선만, IN/OUT은 해당 본선 방향만
         if(dir==="BRANCH"){ if(!isBranch) continue; }
-        else if(dir!=="all"){ if(isBranch||realDir!==dir) continue; }
+        else if(dir!=="all"){ if(isBranch||info.d!==dir) continue; }
         var fullNo=isBranch?key.slice(1):("2"+key);
-        rows.push({time:info.st[stn], no:fullNo, dir:realDir, end:info.end, branch:isBranch});
+        rows.push({time:info.st[stn], no:fullNo, dir:info.d, end:info.end, branch:isBranch});
       }
     }
     rows.sort(function(a,b){return hm2min(a.time)-hm2min(b.time);});
